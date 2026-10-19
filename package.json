@@ -1,0 +1,16 @@
+{
+  "name": "hustera",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Hustera — Build together. Earn independently.",
+  "workspaces": ["apps/*", "packages/*"],
+  "engines": { "node": ">=22.12" },
+  "scripts": {
+    "dev": "npm run dev -w @hustera/web",
+    "build": "npm run build -w @hustera/web",
+    "start": "npm run start -w @hustera/web",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "test:e2e": "npm run test:e2e -w @hustera/web"
+  }
+}
