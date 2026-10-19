@@ -21,11 +21,27 @@ Statuses: `VERIFIED` (built and covered by automated tests) · `TESTED_SIMULATIO
 | Media uploads (images/video in posts) | NOT_BUILT | Needs object storage + scanning |
 | Realtime push for chat | NOT_BUILT | Polling every 5–6 s today |
 
+## Milestone B — Agent foundation
+
+| Feature | Status | Evidence |
+| --- | --- | --- |
+| Missions ("Start a business for me", "Sell my existing product") with ownership confirmation | VERIFIED | `test/agents.test.ts`, `e2e/agents.spec.ts` |
+| Hustera Core deterministic planner, versioned agent + tool registry | VERIFIED | domain tests |
+| Durable task queue in Postgres with dependencies and a checked state machine | VERIFIED | domain + agents tests |
+| Traceable agent-to-agent messages (`task_events` with from/to agent) | VERIFIED | agents tests |
+| Budget engine: upper-bound reservations, per-task/day/total limits, settle/release | TESTED_SIMULATION | Simulated costs only — no payment provider |
+| Approvals (approve-each mode; listing + publishing always need approval) | VERIFIED | agents tests + e2e |
+| Pause / resume / stop per mission; platform-wide emergency stop for admins | VERIFIED | agents tests |
+| Sandbox tools (research plan, offer outline, launch checklist, listing draft) | TESTED_SIMULATION | Drafts from the user's brief; no web access, no claims |
+| Composio capability importer (toolkit listing via `GET /api/v3.1/toolkits`) | NEEDS_CONNECTION | Tested against mocked responses only; needs `COMPOSIO_API_KEY` |
+| Publishing to a sales channel | NEEDS_CONNECTION | Tasks block with `CONNECT_REQUIRED` |
+| LLM-based planning and live research | NOT_BUILT | |
+| Background worker (Trigger.dev) and realtime task stream | NOT_BUILT | Missions advance when the owner presses "Run agents" |
+
 ## Later milestones
 
 | Milestone | Scope | Status |
 | --- | --- | --- |
-| B — Agent foundation | Hustera Core, agent registry, durable queue, budget engine, Composio importer | NOT_BUILT (registry shown as plan) |
 | C — Existing product to first test sale | Product import, storefront, Stripe test checkout, refunds, ledgers | NOT_BUILT |
 | D — AI-created product to first test sale | Research, generation, rights/QA, storefront | NOT_BUILT |
 | E — Creator / freelance marketplace | Listings, proposals, contracts, deliveries, reviews | NOT_BUILT |
@@ -41,5 +57,5 @@ Statuses: `VERIFIED` (built and covered by automated tests) · `TESTED_SIMULATIO
 | Postgres / Supabase | Supported via `DATABASE_URL` |
 | Email provider | NEEDS_CONNECTION |
 | Stripe | NOT_BUILT |
-| Composio | NOT_BUILT — must enumerate real toolkits/actions before claiming any capability |
+| Composio | Toolkit inventory implemented; NEEDS_CONNECTION (no key configured, no per-user connections or actions yet) |
 | Discord linking | NOT_BUILT (optional) |

@@ -52,3 +52,6 @@ Channels and DMs refresh every 5–6 seconds while visible. A real-time event st
 | `src/server/moderation.ts` | Reports, platform actions, appeals |
 | `src/server/sparks.ts` | Sparks awards, reversals, summaries |
 | `src/server/notifications.ts` | Notifications and unread counts |
+
+### ADR-007 — Agent runtime in Postgres, money decisions outside the model
+Missions, tasks, approvals, budget reservations and artifacts live in Postgres (`002_agent_foundation`). `step()` advances one task inside a single transaction: kill-switch check → dependency check → approval gate → budget reservation at the tool's upper-bound cost (`checkReservation` in `@hustera/domain`) → tool execution → settle/release. No language model takes part in approvals, budgets or state transitions. Sandbox tools are deterministic and offline; Composio tools resolve to `CONNECT_REQUIRED` until a user connection exists. A background worker (Trigger.dev) can later call the same `runMission` function.

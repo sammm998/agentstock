@@ -20,14 +20,14 @@ export interface AgentDefinition {
 }
 
 /**
- * The agent registry. Entries describe planned capabilities; none of them are
- * executable until the agent runtime (Milestone B) ships and each capability is
- * verified end to end. No ratings or usage numbers are shown because none exist.
+ * The agent registry. "Simulation" agents run today with sandbox tools that only
+ * produce drafts; "Not built" agents are planned. No ratings or usage numbers are
+ * shown because none exist.
  */
 export const AGENT_REGISTRY: readonly AgentDefinition[] = [
-  { id: "core", name: "Hustera Core", family: "Orchestrator", summary: "Your user-facing business assistant. Plans missions, delegates to specialist agents and reports verified results.", milestone: "B", status: "NOT_BUILT" },
-  { id: "research", name: "Market Research", family: "Research", summary: "Demand, competition and feasibility research with cited sources.", milestone: "B", status: "NOT_BUILT" },
-  { id: "storefront", name: "Ecommerce", family: "Commerce", summary: "Builds storefronts and listings for products you own or are authorised to sell.", milestone: "C", status: "NOT_BUILT" },
+  { id: "core", name: "Hustera Core", family: "Orchestrator", summary: "Plans missions with a deterministic planner, dispatches tasks to specialist agents within your budget and approvals, and records every result.", milestone: "B", status: "TESTED_SIMULATION" },
+  { id: "research", name: "Market Research", family: "Research", summary: "Today: drafts a structured research plan from your brief. Later: live research with cited sources.", milestone: "B", status: "TESTED_SIMULATION" },
+  { id: "storefront", name: "Ecommerce", family: "Commerce", summary: "Today: drafts listings for your approval. Publishing needs a connected store (Milestone C).", milestone: "B–C", status: "TESTED_SIMULATION" },
   { id: "social", name: "Social Content", family: "Marketing", summary: "Drafts posts for YouTube, TikTok and Instagram for your approval before publishing.", milestone: "F", status: "NOT_BUILT" },
   { id: "design", name: "Design Studio", family: "Creative", summary: "Original logos, product images and mockups with commercial-rights checks.", milestone: "D", status: "NOT_BUILT" },
   { id: "web", name: "Website Builder", family: "Build", summary: "Landing pages and small websites built in a sandbox and deployed with your approval.", milestone: "F", status: "NOT_BUILT" },

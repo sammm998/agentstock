@@ -139,6 +139,8 @@ export async function exportAccount(userId: string) {
     direct_messages_sent: await q(`select conversation_id, body, created_at from direct_messages where sender_id = $1`, [userId]),
     reports_filed: await q(`select target_type, target_id, reason, details, status, created_at from reports where reporter_id = $1`, [userId]),
     sparks_ledger: await q(`select rule_id, amount, reason, created_at from rewards_ledger where user_id = $1 order by created_at`, [userId]),
+    missions: await q(`select id, kind, title, brief, region, mode, status, created_at from missions where owner_id = $1 order by created_at`, [userId]),
+    mission_artifacts: await q(`select a.mission_id, a.title, a.content, a.simulated, a.created_at from artifacts a join missions m on m.id = a.mission_id where m.owner_id = $1 order by a.created_at`, [userId]),
   };
 }
 

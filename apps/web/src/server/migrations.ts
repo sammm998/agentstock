@@ -255,4 +255,110 @@ create table audit_events (
 );
 `,
   },
+  {
+    id: "002_agent_foundation",
+    sql: /* sql */ `
+create table missions (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null references users(id) on delete cascade,
+  kind text not null check (kind in ('start_business','sell_existing')),
+  title text not null check (char_length(title) between 3 and 80),
+  brief text not null check (char_length(brief) between 10 and 2000),
+  region text not null,
+  mode text not null default 'approve_each' check (mode in ('approve_each','autonomous')),
+  status text not null default 'active' check (status in ('active','paused','blocked','completed','stopped')),
+  status_reason text not null default '',
+  ownership_confirmed boolean not null default false,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index missions_owner_idx on missions (owner_id, created_at desc);
+
+-- Agent budgets are test-mode only: simulated = true until a payment provider is connected.
+create table budgets (
+  mission_id uuid primary key references missions(id) on delete cascade,
+  currency text not null default 'EUR',
+  total_cents int not null check (total_cents >= 0),
+  per_day_cents int not null check (per_day_cents >= 0),
+  per_task_cents int not null check (per_task_cents >= 0),
+  simulated boolean not null default true
+);
+
+create table tasks (
+  id uuid primary key default gen_random_uuid(),
+  mission_id uuid not null references missions(id) on delete cascade,
+  key text not null,
+  seq int not null,
+  agent_id text not null,
+  tool_id text not null,
+  tool_version int not null,
+  title text not null,
+  depends_on text[] not null default '{}',
+  status text not null default 'queued' check (status in ('queued','awaiting_approval','running','succeeded','failed','blocked','cancelled')),
+  status_reason text not null default '',
+  requires_approval boolean not null default false,
+  attempts int not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (mission_id, key)
+);
+create index tasks_mission_idx on tasks (mission_id, seq);
+
+create table task_events (
+  id bigint generated always as identity primary key,
+  mission_id uuid not null references missions(id) on delete cascade,
+  task_id uuid references tasks(id) on delete cascade,
+  actor text not null check (actor in ('user','agent','system')),
+  from_agent text,
+  to_agent text,
+  kind text not null,
+  message text not null,
+  data jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+create index task_events_mission_idx on task_events (mission_id, id);
+
+create table approvals (
+  id uuid primary key default gen_random_uuid(),
+  task_id uuid not null references tasks(id) on delete cascade,
+  decision text check (decision in ('approved','rejected')),
+  decided_by uuid references users(id) on delete set null,
+  requested_at timestamptz not null default now(),
+  decided_at timestamptz
+);
+create index approvals_task_idx on approvals (task_id);
+
+create table budget_reservations (
+  id uuid primary key default gen_random_uuid(),
+  mission_id uuid not null references missions(id) on delete cascade,
+  task_id uuid not null references tasks(id) on delete cascade,
+  amount_cents int not null check (amount_cents >= 0),
+  settled_cents int,
+  status text not null default 'held' check (status in ('held','settled','released')),
+  simulated boolean not null default true,
+  created_at timestamptz not null default now(),
+  settled_at timestamptz
+);
+create index budget_reservations_mission_idx on budget_reservations (mission_id, created_at);
+
+create table artifacts (
+  id uuid primary key default gen_random_uuid(),
+  mission_id uuid not null references missions(id) on delete cascade,
+  task_id uuid references tasks(id) on delete set null,
+  kind text not null,
+  title text not null,
+  content text not null,
+  simulated boolean not null default true,
+  created_at timestamptz not null default now()
+);
+create index artifacts_mission_idx on artifacts (mission_id, created_at);
+
+create table platform_flags (
+  key text primary key,
+  value boolean not null,
+  updated_by uuid references users(id) on delete set null,
+  updated_at timestamptz not null default now()
+);
+`,
+  },
 ];

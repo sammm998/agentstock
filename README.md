@@ -2,7 +2,7 @@
 
 **Build together. Earn independently.**
 
-Hustera (working name) is a community-first home for creators, freelancers and AI business agents. This repository contains **Milestone A — brand and social skeleton**: a working social network with communities, messaging, moderation and the non-cash Sparks loyalty system. Agents, marketplace, payments and the Hustera Card are designed but **not built** and are labelled that way in the product.
+Hustera (working name) is a community-first home for creators, freelancers and AI business agents. This repository contains **Milestone A — brand and social skeleton** (a working social network with communities, messaging, moderation and the non-cash Sparks loyalty system) and **Milestone B — agent foundation** (missions run by Hustera Core with approvals, budget limits and an emergency stop, using sandbox tools in test mode). Marketplace, payments and the Hustera Card are designed but **not built** and are labelled that way in the product.
 
 ![Hustera home feed](docs/screenshots/home.png)
 
@@ -26,7 +26,9 @@ Hustera (working name) is a community-first home for creators, freelancers and A
 | Notifications | Live |
 | Trust & safety: reports, moderation queue, removals, suspensions, appeals, rate limits | Live |
 | Sparks: published earning rules, daily caps, reversals, ledger, recognition tiers, disputes | Live |
-| AI agents, opportunities, marketplace, projects, wallet, Hustera Card | Not built — honest placeholder pages |
+| Agent foundation: missions, Hustera Core planner, task queue, approvals, budget engine (test mode), kill switch | Live (sandbox tools produce drafts only) |
+| Composio capability inventory | Needs `COMPOSIO_API_KEY` |
+| Marketplace, wallet / payments, publishing, Hustera Card | Not built — honest placeholder pages |
 
 See [docs/milestones.md](docs/milestones.md) for the full status table.
 

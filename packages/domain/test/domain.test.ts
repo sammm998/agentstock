@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   canInSpace,
+  canTransition,
+  checkReservation,
+  getTool,
+  missionSchema,
+  planMission,
   canOnPlatform,
   canRemoveMember,
   extractMentions,
@@ -80,5 +85,40 @@ describe("sparks", () => {
     expect(tierFor(1000).id).toBe("nova");
     expect(nextTier(30)?.id).toBe("flare");
     expect(nextTier(500)).toBeNull();
+  });
+});
+
+describe("agent foundation", () => {
+  it("plans missions with valid dependencies and known tools", () => {
+    for (const kind of ["start_business", "sell_existing"] as const) {
+      const plan = planMission(kind);
+      const keys = new Set(plan.map((t) => t.key));
+      for (const t of plan) {
+        expect(getTool(t.toolId), t.toolId).toBeDefined();
+        for (const d of t.dependsOn) expect(keys.has(d)).toBe(true);
+      }
+    }
+  });
+
+  it("enforces the task state machine", () => {
+    expect(canTransition("queued", "running")).toBe(true);
+    expect(canTransition("succeeded", "queued")).toBe(false);
+    expect(canTransition("awaiting_approval", "running")).toBe(false);
+  });
+
+  it("enforces per-task, per-day and total budget limits", () => {
+    const limits = { totalCents: 100, perDayCents: 50, perTaskCents: 30 };
+    expect(checkReservation(limits, { committedCents: 0, committedTodayCents: 0 }, 30).ok).toBe(true);
+    expect(checkReservation(limits, { committedCents: 0, committedTodayCents: 0 }, 31).ok).toBe(false);
+    expect(checkReservation(limits, { committedCents: 40, committedTodayCents: 40 }, 20).ok).toBe(false);
+    expect(checkReservation(limits, { committedCents: 90, committedTodayCents: 0 }, 20).ok).toBe(false);
+    expect(checkReservation(limits, { committedCents: 0, committedTodayCents: 0 }, -1).ok).toBe(false);
+  });
+
+  it("requires ownership for existing products and ordered limits", () => {
+    const base = { kind: "sell_existing", title: "Planner", brief: "Printable weekly planner PDF", region: "Sweden", mode: "approve_each", totalCents: 100, perDayCents: 50, perTaskCents: 30 };
+    expect(missionSchema.safeParse({ ...base, ownershipConfirmed: false }).success).toBe(false);
+    expect(missionSchema.safeParse({ ...base, ownershipConfirmed: true }).success).toBe(true);
+    expect(missionSchema.safeParse({ ...base, ownershipConfirmed: true, perTaskCents: 60 }).success).toBe(false);
   });
 });

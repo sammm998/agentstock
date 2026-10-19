@@ -4,7 +4,8 @@ import type { Metadata } from "next";
 import { canOnPlatform } from "@hustera/domain";
 import { requireViewer } from "@/server/session";
 import { openAppeals, reportQueue } from "@/server/moderation";
-import { decideAppealAction, resolveReportAction } from "@/app/actions";
+import { decideAppealAction, haltAgentsAction, resolveReportAction } from "@/app/actions";
+import { agentsHalted } from "@/server/agents";
 import { ActionForm } from "@/components/action-form";
 import { EmptyState, PageHeader, TimeAgo } from "@/components/ui";
 
@@ -23,7 +24,7 @@ export default async function ModerationPage({ searchParams }: { searchParams: P
   const viewer = await requireViewer();
   if (!canOnPlatform(viewer.role, "view_reports")) notFound();
   const closed = (await searchParams).view === "closed";
-  const [reports, appeals] = await Promise.all([reportQueue(viewer.role, closed ? "closed" : "open"), openAppeals(viewer.role)]);
+  const [reports, appeals, halted] = await Promise.all([reportQueue(viewer.role, closed ? "closed" : "open"), openAppeals(viewer.role), agentsHalted()]);
 
   return (
     <div className="space-y-6">
@@ -32,6 +33,17 @@ export default async function ModerationPage({ searchParams }: { searchParams: P
         description="Review reports against the community guidelines. Every decision is logged and can be appealed."
         actions={<Link href={closed ? "/moderation" : "/moderation?view=closed"} className="btn-secondary btn-sm">{closed ? "Open queue" : "Resolved"}</Link>}
       />
+      {canOnPlatform(viewer.role, "suspend_user") && (
+        <section className={`card flex flex-wrap items-center justify-between gap-4 p-5 ${halted ? "border-danger/40" : ""}`} aria-labelledby="killswitch">
+          <div>
+            <h2 id="killswitch" className="font-semibold">Agent emergency stop</h2>
+            <p className="text-sm text-muted">{halted ? "All agent missions are paused platform-wide." : "Agents are running normally. Stopping pauses every mission immediately."}</p>
+          </div>
+          <ActionForm action={haltAgentsAction} confirm={halted ? undefined : "Pause all agents for every user?"}>
+            <button name="op" value={halted ? "resume" : "halt"} className={halted ? "btn-primary" : "btn-danger"}>{halted ? "Resume agents" : "Stop all agents"}</button>
+          </ActionForm>
+        </section>
+      )}
       <section aria-labelledby="reports">
         <h2 id="reports" className="eyebrow mb-3">{closed ? "Resolved reports" : `Open reports (${reports.length})`}</h2>
         {reports.length ? (

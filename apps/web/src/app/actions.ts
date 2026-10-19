@@ -7,6 +7,7 @@ import {
   commentSchema,
   firstError,
   messageSchema,
+  missionSchema,
   passwordSchema,
   postSchema,
   profileUpdateSchema,
@@ -22,6 +23,7 @@ import * as social from "@/server/social";
 import * as spaces from "@/server/spaces";
 import * as messages from "@/server/messages";
 import * as moderation from "@/server/moderation";
+import * as agents from "@/server/agents";
 import { markAllRead } from "@/server/notifications";
 import type { ActionState } from "@/components/action-form";
 
@@ -383,5 +385,70 @@ export async function decideAppealAction(fd: FormData): Promise<ActionState> {
   return run(async () => {
     const viewer = await requireViewer();
     await moderation.decideAppeal(viewer, id(fd, "appealId"), str(fd, "decision") === "overturn");
+  });
+}
+
+// ---------------------------------------------------------------- agents
+
+export async function createMissionAction(fd: FormData): Promise<ActionState> {
+  let missionId = "";
+  const r = await run(async () => {
+    const viewer = await requireViewer();
+    const euros = (k: string) => Math.round(Number(str(fd, k) || "0") * 100);
+    const input = parse(missionSchema, {
+      kind: str(fd, "kind"),
+      title: str(fd, "title"),
+      brief: str(fd, "brief"),
+      region: str(fd, "region"),
+      mode: str(fd, "mode"),
+      totalCents: euros("total"),
+      perDayCents: euros("perDay"),
+      perTaskCents: euros("perTask"),
+      ownershipConfirmed: fd.get("ownershipConfirmed") === "on",
+    });
+    missionId = await agents.createMission(viewer.id, input);
+  });
+  if (r?.error) return r;
+  redirect(`/projects/${missionId}`);
+}
+
+export async function runMissionAction(fd: FormData): Promise<ActionState> {
+  return run(async () => {
+    const viewer = await requireViewer();
+    const result = await agents.runMission(viewer.id, id(fd, "missionId"));
+    return result === "done" ? "Mission finished its current plan" : "Waiting for you";
+  });
+}
+
+export async function approvalAction(fd: FormData): Promise<ActionState> {
+  return run(async () => {
+    const viewer = await requireViewer();
+    const missionId = id(fd, "missionId");
+    await agents.decideApproval(viewer.id, id(fd, "taskId"), str(fd, "decision") === "approve");
+    await agents.runMission(viewer.id, missionId);
+  });
+}
+
+export async function missionStateAction(fd: FormData): Promise<ActionState> {
+  return run(async () => {
+    const viewer = await requireViewer();
+    const op = str(fd, "op");
+    if (op !== "pause" && op !== "resume" && op !== "stop") throw new UserError("Invalid request");
+    await agents.setMissionState(viewer.id, id(fd, "missionId"), op);
+  });
+}
+
+export async function retryTaskAction(fd: FormData): Promise<ActionState> {
+  return run(async () => {
+    const viewer = await requireViewer();
+    await agents.retryTask(viewer.id, id(fd, "taskId"));
+    await agents.runMission(viewer.id, id(fd, "missionId"));
+  });
+}
+
+export async function haltAgentsAction(fd: FormData): Promise<ActionState> {
+  return run(async () => {
+    const viewer = await requireViewer();
+    await agents.setAgentsHalted(viewer, str(fd, "op") === "halt");
   });
 }

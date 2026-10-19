@@ -130,3 +130,18 @@ export function extractMentions(text: string): string[] {
   for (const m of text.matchAll(MENTION_RE)) out.add(m[2]!.toLowerCase());
   return [...out].slice(0, 10);
 }
+
+export const missionSchema = z
+  .object({
+    kind: z.enum(["start_business", "sell_existing"]),
+    title: z.string().trim().min(3, "Give the mission a name").max(80),
+    brief: z.string().trim().min(10, "Describe your idea or product in a sentence or two").max(2000),
+    region: z.string().trim().min(2).max(60),
+    mode: z.enum(["approve_each", "autonomous"]),
+    totalCents: z.coerce.number().int().min(0).max(10000),
+    perDayCents: z.coerce.number().int().min(0).max(10000),
+    perTaskCents: z.coerce.number().int().min(0).max(10000),
+    ownershipConfirmed: z.boolean(),
+  })
+  .refine((m) => m.kind !== "sell_existing" || m.ownershipConfirmed, { message: "Confirm that you own or are authorised to sell this product", path: ["ownershipConfirmed"] })
+  .refine((m) => m.perDayCents <= m.totalCents && m.perTaskCents <= m.perDayCents, { message: "Limits must satisfy per task ≤ per day ≤ total", path: ["perDayCents"] });
