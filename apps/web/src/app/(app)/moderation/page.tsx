@@ -4,7 +4,9 @@ import type { Metadata } from "next";
 import { canOnPlatform } from "@hustera/domain";
 import { requireViewer } from "@/server/session";
 import { openAppeals, reportQueue } from "@/server/moderation";
-import { decideAppealAction, haltAgentsAction, resolveReportAction } from "@/app/actions";
+import { decideAppealAction, haltAgentsAction, resolveDisputeAction, resolveReportAction } from "@/app/actions";
+import { openDisputes } from "@/server/marketplace";
+import { formatCents } from "@hustera/domain";
 import { agentsHalted } from "@/server/agents";
 import { ActionForm } from "@/components/action-form";
 import { EmptyState, PageHeader, TimeAgo } from "@/components/ui";
@@ -24,7 +26,7 @@ export default async function ModerationPage({ searchParams }: { searchParams: P
   const viewer = await requireViewer();
   if (!canOnPlatform(viewer.role, "view_reports")) notFound();
   const closed = (await searchParams).view === "closed";
-  const [reports, appeals, halted] = await Promise.all([reportQueue(viewer.role, closed ? "closed" : "open"), openAppeals(viewer.role), agentsHalted()]);
+  const [reports, appeals, halted, disputes] = await Promise.all([reportQueue(viewer.role, closed ? "closed" : "open"), openAppeals(viewer.role), agentsHalted(), openDisputes(viewer.role)]);
 
   return (
     <div className="space-y-6">
@@ -76,6 +78,27 @@ export default async function ModerationPage({ searchParams }: { searchParams: P
           <EmptyState title={closed ? "Nothing resolved yet" : "The queue is clear"}>Thanks for keeping Hustera safe.</EmptyState>
         )}
       </section>
+
+      {disputes.length > 0 && (
+        <section aria-labelledby="disputes">
+          <h2 id="disputes" className="eyebrow mb-3">Marketplace disputes ({disputes.length})</h2>
+          <ul className="space-y-3">
+            {disputes.map((d) => (
+              <li key={d.id} className="card p-5 text-sm">
+                <p><span className="font-semibold">{d.title}</span> · {formatCents(d.price_cents)} · buyer @{d.buyer_handle ?? "deleted"} · seller @{d.seller_handle ?? "deleted"}</p>
+                <p className="mt-2 rounded-xl bg-midnight/50 px-4 py-3">{d.dispute_reason}</p>
+                {d.delivery && <p className="mt-2 text-muted">Latest delivery: {d.delivery}</p>}
+                <ActionForm action={resolveDisputeAction} className="mt-3 flex flex-wrap gap-2">
+                  <input type="hidden" name="contractId" value={d.id} />
+                  <input name="note" maxLength={1000} placeholder="Decision note shown to both parties" aria-label="Decision note" className="input min-w-48 flex-1" />
+                  <button name="outcome" value="refund" className="btn-danger btn-sm">Refund buyer</button>
+                  <button name="outcome" value="complete" className="btn-secondary btn-sm">Mark completed</button>
+                </ActionForm>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {canOnPlatform(viewer.role, "decide_appeals") && (
         <section aria-labelledby="appeals">

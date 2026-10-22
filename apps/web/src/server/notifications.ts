@@ -2,7 +2,7 @@ import "server-only";
 import type { Queryable } from "./db";
 import { q } from "./db";
 
-export type NotificationKind = "follow" | "follow_request" | "like" | "comment" | "mention" | "repost" | "space_invite" | "dm" | "moderation" | "sparks";
+export type NotificationKind = "follow" | "follow_request" | "like" | "comment" | "mention" | "repost" | "space_invite" | "dm" | "moderation" | "sparks" | "order" | "contract";
 
 export async function notify(
   db: Queryable,

@@ -90,8 +90,8 @@ describe("sparks", () => {
 
 describe("agent foundation", () => {
   it("plans missions with valid dependencies and known tools", () => {
-    for (const kind of ["start_business", "sell_existing"] as const) {
-      const plan = planMission(kind);
+    for (const [kind, externalChannel] of [["start_business", false], ["sell_existing", true]] as const) {
+      const plan = planMission(kind, { externalChannel });
       const keys = new Set(plan.map((t) => t.key));
       for (const t of plan) {
         expect(getTool(t.toolId), t.toolId).toBeDefined();
@@ -116,7 +116,7 @@ describe("agent foundation", () => {
   });
 
   it("requires ownership for existing products and ordered limits", () => {
-    const base = { kind: "sell_existing", title: "Planner", brief: "Printable weekly planner PDF", region: "Sweden", mode: "approve_each", totalCents: 100, perDayCents: 50, perTaskCents: 30 };
+    const base = { kind: "sell_existing", title: "Planner", brief: "Printable weekly planner PDF", region: "Sweden", mode: "approve_each", totalCents: 100, perDayCents: 50, perTaskCents: 30, priceCents: 900 };
     expect(missionSchema.safeParse({ ...base, ownershipConfirmed: false }).success).toBe(false);
     expect(missionSchema.safeParse({ ...base, ownershipConfirmed: true }).success).toBe(true);
     expect(missionSchema.safeParse({ ...base, ownershipConfirmed: true, perTaskCents: 60 }).success).toBe(false);

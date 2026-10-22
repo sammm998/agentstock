@@ -1,12 +1,20 @@
 import "server-only";
 import type { MissionKind } from "@hustera/domain";
+import type { Queryable } from "./db";
+import { createProduct, setProductStatus } from "./commerce";
+import { activeConnection, composioConfigured, executeComposioTool, publishTarget } from "./composio";
+import { generateText, llmConfig } from "./llm";
 
 export interface ToolContext {
+  db: Queryable;
+  ownerId: string;
+  missionId: string;
   kind: MissionKind;
   title: string;
   brief: string;
   region: string;
-  /** Artifacts produced by tasks this one depends on, keyed by task key. */
+  priceCents: number;
+  /** Latest artifact content produced by each earlier task, keyed by task key. */
   inputs: Record<string, string>;
 }
 
@@ -121,17 +129,83 @@ const SANDBOX: Record<string, (ctx: ToolContext) => ToolResult> = {
   },
 };
 
-export function executeTool(toolId: string, ctx: ToolContext, opts: { composioConnected: boolean }): ToolOutcome {
+function excerpt(markdown: string | undefined, max = 1500) {
+  return (markdown ?? "").replace(/^_.*_$/gm, "").replace(/\n{3,}/g, "\n\n").trim().slice(0, max);
+}
+
+async function generateProduct(ctx: ToolContext): Promise<ToolOutcome> {
+  if (!llmConfig().provider) return { ok: false, blocked: true, reason: "CONNECT_REQUIRED: no AI model is configured. Set ANTHROPIC_API_KEY (or OPENAI_API_KEY) to generate products." };
+  try {
+    const r = await generateText(
+      "You write practical digital products (guides, templates, checklists) in Markdown for small online sellers. Be concrete and useful. Never invent statistics, testimonials, earnings or guarantees. Do not copy or imitate trademarks or copyrighted works. Write in the language of the brief.",
+      `Product idea: ${ctx.title}\nBrief: ${ctx.brief}\nMarket: ${ctx.region}\n\nOffer outline:\n${excerpt(ctx.inputs.offer)}\n\nWrite the complete product content (800–1500 words) with a title, a short introduction, structured sections and a closing checklist.`,
+    );
+    if (r.text.length < 200) return { ok: false, blocked: false, error: "The model returned too little content" };
+    return {
+      ok: true,
+      result: {
+        costCents: r.costCents,
+        message: `Product content generated with ${r.model} (${r.inputTokens + r.outputTokens} tokens)`,
+        artifact: { kind: "product_content", title: `Product — ${ctx.title}`, content: `_AI-generated draft (${r.provider}/${r.model}). Review it for accuracy and rights before selling._\n\n${r.text}` },
+      },
+    };
+  } catch (e) {
+    return { ok: false, blocked: false, error: e instanceof Error ? e.message : "Model call failed" };
+  }
+}
+
+async function publishToStore(ctx: ToolContext): Promise<ToolOutcome> {
+  const [store] = await ctx.db.query<{ id: string; slug: string }>(`select id, slug from stores where owner_id = $1`, [ctx.ownerId]);
+  if (!store) return { ok: false, blocked: true, reason: "CONNECT_REQUIRED: you don't have a Hustera store yet. Create one under Store, then retry this task." };
+  const content = ctx.kind === "start_business" ? ctx.inputs.generate : undefined;
+  const productId = await createProduct(
+    ctx.ownerId,
+    { title: ctx.title.slice(0, 100), description: ctx.brief, kind: "digital", priceCents: ctx.priceCents, deliveryContent: content ?? "", ownershipConfirmed: true, source: "agent", missionId: ctx.missionId },
+    ctx.db,
+  );
+  if (content) {
+    await setProductStatus(ctx.ownerId, productId, "active", ctx.db);
+    return { ok: true, result: { costCents: 0, message: "Product published to your Hustera store", artifact: { kind: "publication", title: "Published to store", content: `# Live in your store\n\nThe product is live at /store/${store.slug}/${productId}. Buyers receive the reviewed content immediately after payment.` } } };
+  }
+  return { ok: true, result: { costCents: 0, message: "Draft product created in your store", artifact: { kind: "publication", title: "Draft product created", content: `# Draft product created\n\nA draft was added to your store. Open Store → Products to set the product type, add delivery details and publish it.\n\nProduct id: ${productId}` } } };
+}
+
+async function publishExternal(ctx: ToolContext): Promise<ToolOutcome> {
+  if (!composioConfigured()) return { ok: false, blocked: true, reason: "CONNECT_REQUIRED: Composio is not configured (COMPOSIO_API_KEY)." };
+  const target = publishTarget();
+  if (!target) return { ok: false, blocked: true, reason: "CONNECT_REQUIRED: no external publish action is configured (COMPOSIO_PUBLISH_TOOLKIT / COMPOSIO_PUBLISH_TOOL)." };
+  if (!(await activeConnection(ctx.ownerId, target.toolkit))) return { ok: false, blocked: true, reason: `CONNECT_REQUIRED: connect your ${target.toolkit} account under Settings → Connections, then retry.` };
+  try {
+    const r = await executeComposioTool(ctx.ownerId, target.tool, { title: ctx.title, description: excerpt(ctx.inputs.listing, 4000), price: (ctx.priceCents / 100).toFixed(2) });
+    if (!r.successful) return { ok: false, blocked: false, error: r.error ?? "The external store rejected the listing" };
+    return { ok: true, result: { costCents: 0, message: `Published via Composio (${target.tool})`, artifact: { kind: "publication", title: `Published to ${target.toolkit}`, content: "# External publication\n\n```\n" + JSON.stringify(r.data, null, 2).slice(0, 4000) + "\n```" } } };
+  } catch (e) {
+    return { ok: false, blocked: false, error: e instanceof Error ? e.message : "Composio call failed" };
+  }
+}
+
+export async function executeTool(toolId: string, ctx: ToolContext): Promise<ToolOutcome> {
   const impl = SANDBOX[toolId];
   if (impl) return { ok: true, result: impl(ctx) };
-  if (toolId === "channel.publish_listing") {
-    return {
-      ok: false,
-      blocked: true,
-      reason: opts.composioConnected
-        ? "No sales channel is connected for this mission yet. Connect a store via Composio and approve publishing."
-        : "CONNECT_REQUIRED: no sales channel is connected. Publishing needs a Composio connection to your store or marketplace.",
-    };
+  switch (toolId) {
+    case "ai.generate_product":
+      return generateProduct(ctx);
+    case "hustera.rights_qa":
+      return {
+        ok: true,
+        result: {
+          costCents: 0,
+          message: "Rights and quality confirmed by you",
+          artifact: { kind: "rights_review", title: "Rights & quality review", content: `# Rights & quality review\n\nYou approved the generated content for sale on ${new Date().toISOString().slice(0, 10)}, confirming it is accurate, does not copy third-party work, and that you accept responsibility as the seller.` },
+        },
+      };
+    case "hustera.publish_to_store":
+      return publishToStore(ctx);
+    case "composio.publish_listing":
+      return publishExternal(ctx);
+    case "channel.publish_listing":
+      return { ok: false, blocked: true, reason: "CONNECT_REQUIRED: this legacy step was replaced. Stop this mission and start a new one to publish to your Hustera store." };
+    default:
+      return { ok: false, blocked: true, reason: `UNSUPPORTED: tool ${toolId} is not available` };
   }
-  return { ok: false, blocked: true, reason: `UNSUPPORTED: tool ${toolId} is not available` };
 }

@@ -26,6 +26,8 @@ export interface MissionRow {
   brief: string;
   region: string;
   mode: MissionMode;
+  price_cents: number;
+  external_channel: boolean;
   status: MissionStatus;
   status_reason: string;
   created_at: Date;
@@ -105,15 +107,15 @@ export async function setAgentsHalted(actor: { id: string; role: PlatformRole },
 
 export async function createMission(
   ownerId: string,
-  input: { kind: MissionKind; title: string; brief: string; region: string; mode: MissionMode; totalCents: number; perDayCents: number; perTaskCents: number; ownershipConfirmed: boolean },
+  input: { kind: MissionKind; title: string; brief: string; region: string; mode: MissionMode; totalCents: number; perDayCents: number; perTaskCents: number; ownershipConfirmed: boolean; priceCents?: number; externalChannel?: boolean },
 ): Promise<string> {
-  const plan = planMission(input.kind);
+  const plan = planMission(input.kind, { externalChannel: input.externalChannel });
   return tx(async (db) => {
     const [active] = await db.query<{ n: number }>(`select count(*)::int as n from missions where owner_id = $1 and status in ('active','paused','blocked')`, [ownerId]);
     if ((active?.n ?? 0) >= 10) throw new UserError("You can have at most 10 open missions. Stop or complete one first.");
     const [m] = await db.query<{ id: string }>(
-      `insert into missions (owner_id, kind, title, brief, region, mode, ownership_confirmed) values ($1, $2, $3, $4, $5, $6, $7) returning id`,
-      [ownerId, input.kind, input.title, input.brief, input.region, input.mode, input.ownershipConfirmed],
+      `insert into missions (owner_id, kind, title, brief, region, mode, ownership_confirmed, price_cents, external_channel) values ($1, $2, $3, $4, $5, $6, $7, $8, $9) returning id`,
+      [ownerId, input.kind, input.title, input.brief, input.region, input.mode, input.ownershipConfirmed, input.priceCents ?? 900, input.externalChannel ?? false],
     );
     const missionId = m!.id;
     await db.query(`insert into budgets (mission_id, total_cents, per_day_cents, per_task_cents) values ($1, $2, $3, $4)`, [missionId, input.totalCents, input.perDayCents, input.perTaskCents]);
@@ -242,20 +244,21 @@ async function step(ownerId: string, missionId: string): Promise<StepResult> {
     }
 
     const [reservation] = await db.query<{ id: string }>(
-      `insert into budget_reservations (mission_id, task_id, amount_cents) values ($1, $2, $3) returning id`,
-      [missionId, runnable.id, tool.maxCostCents],
+      `insert into budget_reservations (mission_id, task_id, amount_cents, simulated) values ($1, $2, $3, $4) returning id`,
+      [missionId, runnable.id, tool.maxCostCents, tool.simulated],
     );
     await setTaskStatus(db, runnable, "running");
     await db.query(`update tasks set attempts = attempts + 1 where id = $1`, [runnable.id]);
     await event(db, { missionId, taskId: runnable.id, actor: "agent", from: "core", to: runnable.agent_id, kind: "dispatched", message: `${runnable.agent_id === "core" ? "Core is working on" : `Core → ${runnable.agent_id}:`} ${runnable.title} (reserved ${tool.maxCostCents}¢, test mode)` });
 
     const inputs: Record<string, string> = {};
-    for (const dep of runnable.depends_on) {
-      const [a] = await db.query<{ content: string }>(`select a.content from artifacts a join tasks t on t.id = a.task_id where t.mission_id = $1 and t.key = $2 order by a.created_at desc limit 1`, [missionId, dep]);
-      if (a) inputs[dep] = a.content;
-    }
+    const prior = await db.query<{ key: string; content: string }>(
+      `select distinct on (t.key) t.key, a.content from artifacts a join tasks t on t.id = a.task_id where a.mission_id = $1 order by t.key, a.created_at desc`,
+      [missionId],
+    );
+    for (const a of prior) inputs[a.key] = a.content;
 
-    const outcome = executeTool(tool.id, { kind: mission.kind, title: mission.title, brief: mission.brief, region: mission.region, inputs }, { composioConnected: !!process.env.COMPOSIO_API_KEY });
+    const outcome = await executeTool(tool.id, { db, ownerId, missionId, kind: mission.kind, title: mission.title, brief: mission.brief, region: mission.region, priceCents: mission.price_cents, inputs });
     const running = { id: runnable.id, status: "running" as TaskStatus };
 
     if (outcome.ok) {
@@ -266,7 +269,7 @@ async function step(ownerId: string, missionId: string): Promise<StepResult> {
       );
       await db.query(`update budget_reservations set status = 'settled', settled_cents = $2, settled_at = now() where id = $1`, [reservation!.id, cost]);
       await setTaskStatus(db, running, "succeeded");
-      await event(db, { missionId, taskId: runnable.id, actor: "agent", from: runnable.agent_id, to: "core", kind: "result", message: `${runnable.agent_id === "core" ? "Core" : `${runnable.agent_id} → Core`}: ${outcome.result.message} (cost ${cost}¢, simulated)`, data: { artifactId: artifact!.id } });
+      await event(db, { missionId, taskId: runnable.id, actor: "agent", from: runnable.agent_id, to: "core", kind: "result", message: `${runnable.agent_id === "core" ? "Core" : `${runnable.agent_id} → Core`}: ${outcome.result.message} (cost ${cost}¢${tool.simulated ? ", simulated" : ""})`, data: { artifactId: artifact!.id } });
     } else {
       await db.query(`update budget_reservations set status = 'released', settled_at = now() where id = $1`, [reservation!.id]);
       if (outcome.blocked) {

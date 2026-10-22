@@ -361,4 +361,167 @@ create table platform_flags (
 );
 `,
   },
+  {
+    id: "003_commerce_marketplace",
+    sql: /* sql */ `
+-- The store owner is the seller of record for every product in their store.
+create table stores (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null unique references users(id) on delete cascade,
+  slug text not null unique check (slug ~ '^[a-z0-9-]{3,32}$'),
+  name text not null,
+  description text not null default '',
+  seller_legal_name text not null,
+  seller_country text not null check (char_length(seller_country) = 2),
+  support_email text not null,
+  created_at timestamptz not null default now()
+);
+
+create table products (
+  id uuid primary key default gen_random_uuid(),
+  store_id uuid not null references stores(id) on delete cascade,
+  title text not null check (char_length(title) between 3 and 100),
+  description text not null,
+  kind text not null check (kind in ('digital','physical','service')),
+  price_cents int not null check (price_cents between 100 and 1000000),
+  currency text not null default 'EUR',
+  delivery_content text not null default '',
+  status text not null default 'draft' check (status in ('draft','active','archived')),
+  ownership_confirmed boolean not null default false,
+  source text not null default 'manual' check (source in ('manual','url_import','agent')),
+  source_url text,
+  mission_id uuid references missions(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  check (status <> 'active' or ownership_confirmed)
+);
+create index products_store_idx on products (store_id, status);
+
+create table orders (
+  id uuid primary key default gen_random_uuid(),
+  kind text not null default 'product' check (kind in ('product','contract')),
+  product_id uuid references products(id) on delete set null,
+  contract_id uuid,
+  seller_id uuid references users(id) on delete set null,
+  buyer_id uuid references users(id) on delete set null,
+  buyer_email text not null,
+  title text not null,
+  amount_cents int not null check (amount_cents > 0),
+  currency text not null default 'EUR',
+  status text not null default 'pending' check (status in ('pending','paid','refunded','cancelled')),
+  provider text not null check (provider in ('stripe','test')),
+  provider_session_id text unique,
+  provider_payment_id text,
+  fee_cents int,
+  simulated boolean not null,
+  access_token text not null unique,
+  withdrawal_waiver boolean not null default false,
+  created_at timestamptz not null default now(),
+  paid_at timestamptz,
+  refunded_at timestamptz
+);
+create index orders_seller_idx on orders (seller_id, created_at desc);
+create index orders_buyer_idx on orders (buyer_id, created_at desc);
+
+create table payment_events (
+  provider text not null,
+  event_id text not null,
+  type text not null,
+  received_at timestamptz not null default now(),
+  primary key (provider, event_id)
+);
+
+-- Double-entry ledger for real business money. Separate from Sparks and from agent test budgets.
+create table ledger_entries (
+  id bigint generated always as identity primary key,
+  owner_id uuid not null references users(id) on delete cascade,
+  entry_group uuid not null,
+  account text not null,
+  amount_cents int not null,
+  order_id uuid references orders(id) on delete set null,
+  memo text not null default '',
+  simulated boolean not null,
+  created_at timestamptz not null default now()
+);
+create index ledger_owner_idx on ledger_entries (owner_id, created_at);
+create index ledger_group_idx on ledger_entries (entry_group);
+
+create table services (
+  id uuid primary key default gen_random_uuid(),
+  seller_id uuid not null references users(id) on delete cascade,
+  title text not null check (char_length(title) between 5 and 100),
+  description text not null,
+  category text not null,
+  price_cents int not null check (price_cents between 500 and 1000000),
+  delivery_days int not null check (delivery_days between 1 and 90),
+  revisions int not null default 1 check (revisions between 0 and 10),
+  ai_assisted boolean not null default false,
+  status text not null default 'active' check (status in ('active','paused')),
+  created_at timestamptz not null default now()
+);
+create index services_category_idx on services (category, created_at desc);
+
+create table contracts (
+  id uuid primary key default gen_random_uuid(),
+  service_id uuid references services(id) on delete set null,
+  buyer_id uuid references users(id) on delete set null,
+  seller_id uuid references users(id) on delete set null,
+  title text not null,
+  price_cents int not null,
+  delivery_days int not null,
+  revisions_allowed int not null,
+  revisions_used int not null default 0,
+  requirements text not null,
+  status text not null default 'requested' check (status in ('requested','accepted','in_progress','delivered','completed','cancelled','disputed')),
+  delivery text,
+  dispute_reason text,
+  resolution text,
+  due_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index contracts_buyer_idx on contracts (buyer_id);
+create index contracts_seller_idx on contracts (seller_id);
+
+create table contract_events (
+  id bigint generated always as identity primary key,
+  contract_id uuid not null references contracts(id) on delete cascade,
+  actor_id uuid references users(id) on delete set null,
+  kind text not null,
+  message text not null,
+  created_at timestamptz not null default now()
+);
+
+-- Reviews are only possible for completed contracts, once per party.
+create table reviews (
+  id uuid primary key default gen_random_uuid(),
+  contract_id uuid not null references contracts(id) on delete cascade,
+  author_id uuid not null references users(id) on delete cascade,
+  subject_id uuid not null references users(id) on delete cascade,
+  service_id uuid references services(id) on delete set null,
+  rating int not null check (rating between 1 and 5),
+  body text not null default '' check (char_length(body) <= 1000),
+  created_at timestamptz not null default now(),
+  unique (contract_id, author_id)
+);
+
+alter table missions add column price_cents int not null default 900 check (price_cents between 100 and 1000000);
+alter table missions add column external_channel boolean not null default false;
+
+alter table notifications drop constraint notifications_kind_check;
+alter table notifications add constraint notifications_kind_check check (kind in ('follow','follow_request','like','comment','mention','repost','space_invite','dm','moderation','sparks','order','contract'));
+
+create table connected_accounts (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references users(id) on delete cascade,
+  provider text not null check (provider in ('composio')),
+  toolkit text not null,
+  external_id text,
+  status text not null default 'pending' check (status in ('pending','active','failed','revoked')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (user_id, provider, toolkit)
+);
+`,
+  },
 ];

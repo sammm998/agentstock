@@ -12,7 +12,7 @@ export type CapabilityStatus = "READY" | "CONNECT_REQUIRED" | "APPROVAL_REQUIRED
 
 // ---------------------------------------------------------------- tools
 
-export type ToolProvider = "sandbox" | "composio";
+export type ToolProvider = "sandbox" | "composio" | "hustera" | "llm";
 
 export interface ToolDefinition {
   id: string;
@@ -40,7 +40,12 @@ export const TOOL_REGISTRY: readonly ToolDefinition[] = [
   { id: "sandbox.offer_outline", version: 1, provider: "sandbox", name: "Offer outline", description: "Drafts an offer: audience, problem, deliverables, pricing hypotheses to test, and unit-economics worksheet.", maxCostCents: 20, requiresApproval: false, status: "READY", simulated: true },
   { id: "sandbox.compliance_checklist", version: 1, provider: "sandbox", name: "Launch checklist", description: "Lists rights, consumer-law, VAT and platform-policy items to confirm before selling in Sweden/EU.", maxCostCents: 10, requiresApproval: false, status: "READY", simulated: true },
   { id: "sandbox.listing_draft", version: 1, provider: "sandbox", name: "Listing draft", description: "Writes a product listing draft for your review. Nothing is published.", maxCostCents: 30, requiresApproval: true, status: "READY", simulated: true },
-  { id: "channel.publish_listing", version: 1, provider: "composio", name: "Publish listing", description: "Publishes an approved listing to a connected store or marketplace.", maxCostCents: 0, requiresApproval: true, status: "CONNECT_REQUIRED", simulated: false },
+  { id: "ai.generate_product", version: 1, provider: "llm", name: "Generate digital product", description: "Writes the content of a digital product (guide, template or checklist) from your offer, using the configured AI model.", maxCostCents: 50, requiresApproval: false, status: "CONNECT_REQUIRED", simulated: false },
+  { id: "hustera.rights_qa", version: 1, provider: "hustera", name: "Rights & quality review", description: "You confirm the generated content is accurate, original enough to sell, and free of third-party rights issues.", maxCostCents: 0, requiresApproval: true, status: "READY", simulated: false },
+  { id: "hustera.publish_to_store", version: 1, provider: "hustera", name: "Publish to your Hustera store", description: "Creates the product in your Hustera storefront. Digital products with delivery content go live; others are saved as drafts for you to finish.", maxCostCents: 0, requiresApproval: true, status: "READY", simulated: false },
+  { id: "composio.publish_listing", version: 1, provider: "composio", name: "Publish to external channel", description: "Publishes the approved listing to an external store (e.g. Shopify) through your Composio connection.", maxCostCents: 0, requiresApproval: true, status: "CONNECT_REQUIRED", simulated: false },
+  /** Deprecated: replaced by hustera.publish_to_store and composio.publish_listing. Kept for existing missions. */
+  { id: "channel.publish_listing", version: 1, provider: "composio", name: "Publish listing (legacy)", description: "Publishes an approved listing to a connected store or marketplace.", maxCostCents: 0, requiresApproval: true, status: "CONNECT_REQUIRED", simulated: false },
 ];
 
 export function getTool(id: string): ToolDefinition | undefined {
@@ -70,13 +75,26 @@ export interface PlannedTask {
  * Hustera Core's deterministic planner. It selects a small, fixed sequence of
  * tools per mission kind; LLM-based planning is a later capability.
  */
-export function planMission(kind: MissionKind): PlannedTask[] {
-  const research: PlannedTask = { key: "research", agentId: "research", toolId: "sandbox.research_plan", title: kind === "start_business" ? "Research demand and feasibility" : "Research audience and competitors", dependsOn: [] };
-  const offer: PlannedTask = { key: "offer", agentId: "core", toolId: "sandbox.offer_outline", title: kind === "start_business" ? "Outline a first offer to test" : "Evaluate offer and unit economics", dependsOn: ["research"] };
-  const checklist: PlannedTask = { key: "checklist", agentId: "core", toolId: "sandbox.compliance_checklist", title: "Prepare launch checklist", dependsOn: ["offer"] };
-  const listing: PlannedTask = { key: "listing", agentId: "storefront", toolId: "sandbox.listing_draft", title: "Draft a product listing", dependsOn: ["offer"] };
-  const publish: PlannedTask = { key: "publish", agentId: "storefront", toolId: "channel.publish_listing", title: "Publish listing to a sales channel", dependsOn: ["listing", "checklist"] };
-  return [research, offer, checklist, listing, publish];
+export function planMission(kind: MissionKind, opts: { externalChannel?: boolean } = {}): PlannedTask[] {
+  const plan: PlannedTask[] = [
+    { key: "research", agentId: "research", toolId: "sandbox.research_plan", title: kind === "start_business" ? "Research demand and feasibility" : "Research audience and competitors", dependsOn: [] },
+    { key: "offer", agentId: "core", toolId: "sandbox.offer_outline", title: kind === "start_business" ? "Outline a first offer to test" : "Evaluate offer and unit economics", dependsOn: ["research"] },
+  ];
+  const publishDeps = ["listing", "checklist"];
+  if (kind === "start_business") {
+    plan.push(
+      { key: "generate", agentId: "design", toolId: "ai.generate_product", title: "Create the digital product", dependsOn: ["offer"] },
+      { key: "rights", agentId: "core", toolId: "hustera.rights_qa", title: "Review rights and quality", dependsOn: ["generate"] },
+    );
+    publishDeps.push("rights");
+  }
+  plan.push(
+    { key: "checklist", agentId: "core", toolId: "sandbox.compliance_checklist", title: "Prepare launch checklist", dependsOn: ["offer"] },
+    { key: "listing", agentId: "storefront", toolId: "sandbox.listing_draft", title: "Draft a product listing", dependsOn: ["offer"] },
+    { key: "publish", agentId: "storefront", toolId: "hustera.publish_to_store", title: "Publish to your Hustera store", dependsOn: publishDeps },
+  );
+  if (opts.externalChannel) plan.push({ key: "external", agentId: "storefront", toolId: "composio.publish_listing", title: "Publish to your external store", dependsOn: ["publish"] });
+  return plan;
 }
 
 // ---------------------------------------------------------------- task state machine

@@ -2,7 +2,7 @@
 
 **Build together. Earn independently.**
 
-Hustera (working name) is a community-first home for creators, freelancers and AI business agents. This repository contains **Milestone A — brand and social skeleton** (a working social network with communities, messaging, moderation and the non-cash Sparks loyalty system) and **Milestone B — agent foundation** (missions run by Hustera Core with approvals, budget limits and an emergency stop, using sandbox tools in test mode). Marketplace, payments and the Hustera Card are designed but **not built** and are labelled that way in the product.
+Hustera (working name) is a community-first home for creators, freelancers and AI business agents. This repository contains **Milestone A — brand and social skeleton** (a working social network with communities, messaging, moderation and the non-cash Sparks loyalty system) and **Milestone B — agent foundation** (missions run by Hustera Core with approvals, budget limits and an emergency stop, using sandbox tools in test mode). It also includes **Milestones C–F**: stores and checkout, a double-entry ledger, AI-created products, a freelance marketplace and a Composio client that is ready for keys. The Hustera Card and pooled funding remain concepts, labelled that way in the product.
 
 ![Hustera home feed](docs/screenshots/home.png)
 
@@ -27,8 +27,12 @@ Hustera (working name) is a community-first home for creators, freelancers and A
 | Trust & safety: reports, moderation queue, removals, suspensions, appeals, rate limits | Live |
 | Sparks: published earning rules, daily caps, reversals, ledger, recognition tiers, disputes | Live |
 | Agent foundation: missions, Hustera Core planner, task queue, approvals, budget engine (test mode), kill switch | Live (sandbox tools produce drafts only) |
-| Composio capability inventory | Needs `COMPOSIO_API_KEY` |
-| Marketplace, wallet / payments, publishing, Hustera Card | Not built — honest placeholder pages |
+| Stores, products, URL import, checkout, digital delivery, refunds | Live (test checkout; Stripe needs keys) |
+| Wallet: double-entry ledger, costs, profit and 30 % fee preview | Live (preview only, nothing collected) |
+| AI-created products with mandatory rights review | Needs `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` |
+| Marketplace: services, contracts, deliveries, revisions, disputes, verified reviews | Live (test checkout) |
+| Composio: inventory, per-user connections, external publishing | Prepared — needs keys, see [docs/composio.md](docs/composio.md) |
+| Desktop companion, Hustera Card, pooled funding | Not built / blocked by design |
 
 See [docs/milestones.md](docs/milestones.md) for the full status table.
 
@@ -58,11 +62,16 @@ npm run test:e2e     # Playwright: desktop + mobile flows against a production b
 
 If Playwright's bundled Chromium isn't installed, point it at an existing one with `PLAYWRIGHT_CHROMIUM_PATH=/path/to/chrome`.
 
+## Configuration
+
+All integrations are optional and off by default — see [`apps/web/.env.example`](apps/web/.env.example). Without keys the app runs fully with a clearly labelled simulated checkout (outside production) and blocks AI/Composio steps with `CONNECT_REQUIRED`.
+
 ## Deploying
 
 1. Create a Postgres database (e.g. Supabase). Set `DATABASE_URL` to its connection string. Migrations run automatically on first request.
 2. Set `HUSTERA_ADMIN_EMAILS` for the first admins.
-3. `npm run build && npm start` (or deploy `apps/web` to any Node host that supports Next.js).
+3. Optional: `STRIPE_SECRET_KEY` + `STRIPE_WEBHOOK_SECRET` (point a Stripe webhook at `/api/stripe/webhook` for `checkout.session.completed`), an AI key, Composio keys, and `CRON_SECRET` with a scheduler calling `POST /api/cron/agents`.
+4. `npm run build && npm start` (or deploy `apps/web` to any Node host that supports Next.js).
 
 Sessions use secure, HTTP-only cookies in production, so serve over HTTPS.
 

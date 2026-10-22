@@ -48,6 +48,11 @@ export default async function SettingsPage() {
         </ActionForm>
       </section>
 
+      <Link href="/settings/connections" className="card flex items-center justify-between p-5 hover:border-indigo/50">
+        <span><span className="block font-semibold">Connections</span><span className="text-sm text-muted">Apps your agents may use, payments and AI status</span></span>
+        <span aria-hidden="true">→</span>
+      </Link>
+
       <section className="card p-6" aria-labelledby="blocked">
         <h2 id="blocked" className="font-semibold">Blocked accounts</h2>
         {blocked.length ? (

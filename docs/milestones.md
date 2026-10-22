@@ -35,20 +35,57 @@ Statuses: `VERIFIED` (built and covered by automated tests) · `TESTED_SIMULATIO
 | Sandbox tools (research plan, offer outline, launch checklist, listing draft) | TESTED_SIMULATION | Drafts from the user's brief; no web access, no claims |
 | Composio capability importer (toolkit listing via `GET /api/v3.1/toolkits`) | NEEDS_CONNECTION | Tested against mocked responses only; needs `COMPOSIO_API_KEY` |
 | Publishing to a sales channel | NEEDS_CONNECTION | Tasks block with `CONNECT_REQUIRED` |
-| LLM-based planning and live research | NOT_BUILT | |
-| Background worker (Trigger.dev) and realtime task stream | NOT_BUILT | Missions advance when the owner presses "Run agents" |
+| LLM-based planning and live web research | NOT_BUILT | Planning stays deterministic by design |
+| Background worker and realtime task stream | Partially | `POST /api/cron/agents` advances autonomous missions; realtime stream NOT_BUILT |
 
-## Later milestones
+## Milestone C — Existing product to first test sale
+
+| Feature | Status | Evidence |
+| --- | --- | --- |
+| Stores with seller-of-record identity shown to buyers | VERIFIED | `test/commerce.test.ts`, `e2e/commerce.spec.ts` |
+| Products (digital / physical / service), ownership confirmation, publish rules | VERIFIED | commerce tests |
+| Product import from URL with SSRF protection | VERIFIED | commerce + domain tests (mocked network) |
+| Checkout: simulated test provider | TESTED_SIMULATION | e2e: guest purchase end to end |
+| Checkout: Stripe Checkout (test keys only by default) + signed webhook | NEEDS_CONNECTION | Code complete; needs `STRIPE_SECRET_KEY` + `STRIPE_WEBHOOK_SECRET` |
+| Digital delivery after payment, EU withdrawal-right consent | VERIFIED | commerce tests + e2e |
+| Refunds (Stripe refund API or simulated) | VERIFIED (simulated) | commerce tests + e2e |
+| Double-entry ledger, costs, profit, 30 % settlement preview with loss carry-forward | VERIFIED | domain + commerce tests (preview only, nothing collected) |
+| Agents publish to the user's Hustera store after approval | VERIFIED | agents tests + e2e |
+
+## Milestone D — AI-created product to first test sale
+
+| Feature | Status | Evidence |
+| --- | --- | --- |
+| AI product generation step (Anthropic or OpenAI) with budget reservation | NEEDS_CONNECTION | Tested with a mocked model; needs `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` |
+| Mandatory human rights & quality review before publishing | VERIFIED | agents tests |
+| Generated product goes live and is delivered after test payment | VERIFIED (mocked model) | agents tests |
+
+## Milestone E — Creator / freelance marketplace
+
+| Feature | Status | Evidence |
+| --- | --- | --- |
+| Service listings with categories, AI-assistance disclosure, pause/resume | VERIFIED | commerce tests + e2e |
+| Contracts: request → accept → pay → deliver → revisions → complete | VERIFIED | commerce tests + e2e |
+| Reviews only for completed contracts, once per party | VERIFIED | commerce tests + e2e |
+| Disputes resolved by moderators (refund or complete) | VERIFIED | commerce tests |
+| Payment for contracts | TESTED_SIMULATION | Test checkout; real payouts to sellers need Stripe Connect onboarding and a legal structure (NEEDS_APPROVAL) |
+
+## Milestone F — Composio online business agents
+
+| Feature | Status | Evidence |
+| --- | --- | --- |
+| Per-user connections (start, confirm, revoke) | NEEDS_CONNECTION | Mocked tests; see `docs/composio.md` |
+| Tool execution + "Publish to external store" mission step | NEEDS_CONNECTION | Mocked tests; tool slug configurable |
+| Capability inventory incl. auth configs | NEEDS_CONNECTION | integration tests |
+
+## Other milestones
 
 | Milestone | Scope | Status |
 | --- | --- | --- |
-| C — Existing product to first test sale | Product import, storefront, Stripe test checkout, refunds, ledgers | NOT_BUILT |
-| D — AI-created product to first test sale | Research, generation, rights/QA, storefront | NOT_BUILT |
-| E — Creator / freelance marketplace | Listings, proposals, contracts, deliveries, reviews | NOT_BUILT |
-| F — Composio online business agents | End-to-end agent workflows | NOT_BUILT |
-| G — Social and loyalty | Richer communities, creator monetisation | Partially (Sparks live) |
-| H — Browser / desktop | Isolated browsers, Tauri companion | NOT_BUILT |
+| G — Social and loyalty | Communities, Sparks, marketplace reviews | VERIFIED (Milestones A + E) |
+| H — Browser / desktop | Isolated browsers, Tauri companion | NOT_BUILT — needs a native app and a security review |
 | I — Regulated options | Card program, pooled funding | BLOCKED until licensed partners and legal authorisation |
+| Background worker | `POST /api/cron/agents` with `CRON_SECRET` advances autonomous missions | VERIFIED (route), schedule NEEDS_CONNECTION |
 
 ## Integration inventory
 
@@ -56,6 +93,7 @@ Statuses: `VERIFIED` (built and covered by automated tests) · `TESTED_SIMULATIO
 | --- | --- |
 | Postgres / Supabase | Supported via `DATABASE_URL` |
 | Email provider | NEEDS_CONNECTION |
-| Stripe | NOT_BUILT |
-| Composio | Toolkit inventory implemented; NEEDS_CONNECTION (no key configured, no per-user connections or actions yet) |
+| Stripe | Checkout, webhook, refunds implemented; NEEDS_CONNECTION (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`) |
+| Composio | Inventory, connections and tool execution implemented; NEEDS_CONNECTION — see `docs/composio.md` |
+| AI model (Anthropic / OpenAI) | Implemented; NEEDS_CONNECTION (`ANTHROPIC_API_KEY` or `OPENAI_API_KEY`) |
 | Discord linking | NOT_BUILT (optional) |

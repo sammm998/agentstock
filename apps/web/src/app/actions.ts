@@ -2,8 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import {
   channelSchema,
+  costSchema,
+  emailSchema,
+  productSchema,
+  storeSchema,
   commentSchema,
   firstError,
   messageSchema,
@@ -18,12 +23,15 @@ import {
 } from "@hustera/domain";
 import { UserError, isUuid } from "@/server/core";
 import { authenticate, changePassword, deleteAccount, registerUser, updateProfile } from "@/server/accounts";
-import { endSession, requireViewer, startSession } from "@/server/session";
+import { endSession, getViewer, requireViewer, startSession } from "@/server/session";
 import * as social from "@/server/social";
 import * as spaces from "@/server/spaces";
 import * as messages from "@/server/messages";
 import * as moderation from "@/server/moderation";
 import * as agents from "@/server/agents";
+import * as commerce from "@/server/commerce";
+import * as marketplace from "@/server/marketplace";
+import * as composio from "@/server/composio";
 import { markAllRead } from "@/server/notifications";
 import type { ActionState } from "@/components/action-form";
 
@@ -405,6 +413,8 @@ export async function createMissionAction(fd: FormData): Promise<ActionState> {
       perDayCents: euros("perDay"),
       perTaskCents: euros("perTask"),
       ownershipConfirmed: fd.get("ownershipConfirmed") === "on",
+      priceCents: euros("price") || 900,
+      externalChannel: fd.get("externalChannel") === "on",
     });
     missionId = await agents.createMission(viewer.id, input);
   });
@@ -450,5 +460,202 @@ export async function haltAgentsAction(fd: FormData): Promise<ActionState> {
   return run(async () => {
     const viewer = await requireViewer();
     await agents.setAgentsHalted(viewer, str(fd, "op") === "halt");
+  });
+}
+
+// ---------------------------------------------------------------- commerce
+
+async function baseUrl(): Promise<string> {
+  if (process.env.HUSTERA_BASE_URL) return process.env.HUSTERA_BASE_URL.replace(/\/$/, "");
+  const h = await headers();
+  const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000";
+  const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
+  return `${proto}://${host}`;
+}
+
+function euroCents(fd: FormData, key: string): number {
+  const v = Number(str(fd, key).replace(",", "."));
+  return Number.isFinite(v) ? Math.round(v * 100) : NaN;
+}
+
+export async function saveStoreAction(fd: FormData): Promise<ActionState> {
+  return run(async () => {
+    const viewer = await requireViewer();
+    await commerce.saveStore(viewer.id, parse(storeSchema, Object.fromEntries(fd)));
+    return "Store saved";
+  });
+}
+
+export async function createProductAction(fd: FormData): Promise<ActionState> {
+  return run(async () => {
+    const viewer = await requireViewer();
+    const input = parse(productSchema, {
+      title: str(fd, "title"),
+      description: str(fd, "description"),
+      kind: str(fd, "kind"),
+      priceCents: euroCents(fd, "price"),
+      deliveryContent: str(fd, "deliveryContent"),
+      ownershipConfirmed: fd.get("ownershipConfirmed") === "on",
+    });
+    const sourceUrl = str(fd, "sourceUrl") || null;
+    await commerce.createProduct(viewer.id, { ...input, source: sourceUrl ? "url_import" : "manual", sourceUrl });
+    return "Product saved as draft";
+  });
+}
+
+export async function importProductAction(fd: FormData): Promise<ActionState> {
+  const r = await run(async () => {
+    await requireViewer();
+    const data = await commerce.importFromUrl(str(fd, "url"));
+    return JSON.stringify(data);
+  });
+  return r;
+}
+
+export async function productStatusAction(fd: FormData): Promise<ActionState> {
+  return run(async () => {
+    const viewer = await requireViewer();
+    const status = str(fd, "status");
+    if (status !== "draft" && status !== "active" && status !== "archived") throw new UserError("Invalid request");
+    await commerce.setProductStatus(viewer.id, id(fd, "productId"), status);
+  });
+}
+
+export async function buyProductAction(fd: FormData): Promise<ActionState> {
+  let target = "";
+  const r = await run(async () => {
+    const viewer = await getViewer();
+    const email = viewer?.email ?? parse(emailSchema, str(fd, "email"));
+    const res = await commerce.buyProduct(id(fd, "productId"), { id: viewer?.id ?? null, email }, fd.get("waiver") === "on", await baseUrl());
+    target = res.redirectUrl;
+  });
+  if (r?.error) return r;
+  redirect(target);
+}
+
+export async function completeTestCheckoutAction(fd: FormData): Promise<ActionState> {
+  const token = str(fd, "token");
+  const r = await run(async () => {
+    await commerce.completeTestCheckout(token);
+  });
+  if (r?.error) return r;
+  redirect(`/orders/${token}?paid=1`);
+}
+
+export async function refundOrderAction(fd: FormData): Promise<ActionState> {
+  return run(async () => {
+    const viewer = await requireViewer();
+    await commerce.refundOrder(viewer.id, id(fd, "orderId"));
+    return "Refunded";
+  });
+}
+
+export async function recordCostAction(fd: FormData): Promise<ActionState> {
+  return run(async () => {
+    const viewer = await requireViewer();
+    const input = parse(costSchema, { category: str(fd, "category"), amountCents: euroCents(fd, "amount"), memo: str(fd, "memo") });
+    await commerce.recordCost(viewer.id, input);
+    return "Cost recorded";
+  });
+}
+
+// ---------------------------------------------------------------- marketplace
+
+export async function createServiceAction(fd: FormData): Promise<ActionState> {
+  let serviceId = "";
+  const r = await run(async () => {
+    const viewer = await requireViewer();
+    const title = str(fd, "title").trim();
+    const description = str(fd, "description").trim();
+    if (title.length < 5 || title.length > 100) throw new UserError("Title must be 5–100 characters");
+    if (description.length < 20 || description.length > 5000) throw new UserError("Describe the service in 20–5000 characters");
+    const priceCents = euroCents(fd, "price");
+    if (!(priceCents >= 500 && priceCents <= 1_000_000)) throw new UserError("Price must be between €5 and €10,000");
+    const deliveryDays = Number(str(fd, "deliveryDays"));
+    const revisions = Number(str(fd, "revisions"));
+    if (!Number.isInteger(deliveryDays) || deliveryDays < 1 || deliveryDays > 90) throw new UserError("Delivery time must be 1–90 days");
+    if (!Number.isInteger(revisions) || revisions < 0 || revisions > 10) throw new UserError("Revisions must be 0–10");
+    serviceId = await marketplace.createService(viewer.id, { title, description, category: str(fd, "category"), priceCents, deliveryDays, revisions, aiAssisted: fd.get("aiAssisted") === "on" });
+  });
+  if (r?.error) return r;
+  redirect(`/marketplace/${serviceId}`);
+}
+
+export async function serviceStatusAction(fd: FormData): Promise<ActionState> {
+  return run(async () => {
+    const viewer = await requireViewer();
+    await marketplace.setServiceStatus(viewer.id, id(fd, "serviceId"), str(fd, "status") === "paused" ? "paused" : "active");
+  });
+}
+
+export async function requestContractAction(fd: FormData): Promise<ActionState> {
+  let contractId = "";
+  const r = await run(async () => {
+    const viewer = await requireViewer();
+    contractId = await marketplace.requestContract(viewer.id, id(fd, "serviceId"), str(fd, "requirements"));
+  });
+  if (r?.error) return r;
+  redirect(`/contracts/${contractId}`);
+}
+
+export async function contractAction(fd: FormData): Promise<ActionState> {
+  let target = "";
+  const r = await run(async () => {
+    const viewer = await requireViewer();
+    const contractId = id(fd, "contractId");
+    switch (str(fd, "op")) {
+      case "accept":
+        return marketplace.respondToRequest(viewer.id, contractId, true);
+      case "decline":
+        return marketplace.respondToRequest(viewer.id, contractId, false);
+      case "pay":
+        target = (await marketplace.payContract(viewer.id, contractId, viewer.email, await baseUrl())).redirectUrl;
+        return;
+      case "deliver":
+        return marketplace.deliver(viewer.id, contractId, str(fd, "delivery"));
+      case "complete":
+        return marketplace.reviewDelivery(viewer.id, contractId, "accept");
+      case "revise":
+        return marketplace.reviewDelivery(viewer.id, contractId, "revise", str(fd, "note"));
+      case "cancel":
+        return marketplace.cancelContract(viewer.id, contractId);
+      case "dispute":
+        return marketplace.openDispute(viewer.id, contractId, str(fd, "reason"));
+      case "review":
+        await marketplace.leaveReview(viewer.id, contractId, Number(str(fd, "rating")), str(fd, "body"));
+        return "Thanks for your review";
+      default:
+        throw new UserError("Invalid request");
+    }
+  });
+  if (r?.error || !target) return r;
+  redirect(target);
+}
+
+export async function resolveDisputeAction(fd: FormData): Promise<ActionState> {
+  return run(async () => {
+    const viewer = await requireViewer();
+    await marketplace.resolveDispute(viewer, id(fd, "contractId"), str(fd, "outcome") === "refund" ? "refund" : "complete", str(fd, "note"));
+  });
+}
+
+// ---------------------------------------------------------------- connections
+
+export async function connectToolkitAction(fd: FormData): Promise<ActionState> {
+  let target = "";
+  const r = await run(async () => {
+    const viewer = await requireViewer();
+    const toolkit = str(fd, "toolkit");
+    if (!/^[a-z0-9_-]{2,40}$/.test(toolkit)) throw new UserError("Invalid toolkit");
+    target = await composio.startConnection(viewer.id, toolkit, `${await baseUrl()}/api/composio/callback`);
+  });
+  if (r?.error) return r;
+  redirect(target);
+}
+
+export async function revokeConnectionAction(fd: FormData): Promise<ActionState> {
+  return run(async () => {
+    const viewer = await requireViewer();
+    await composio.revokeConnection(viewer.id, id(fd, "connectionId"));
   });
 }

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { CheckCircle2 } from "lucide-react";
 import { OPPORTUNITY_TEMPLATES } from "@hustera/domain";
-import { RoadmapNotice } from "@/components/roadmap";
+import Link from "next/link";
 import { PageHeader, StatusBadge } from "@/components/ui";
 
 export const metadata: Metadata = { title: "Opportunities" };
@@ -10,9 +10,9 @@ export default function OpportunitiesPage() {
   return (
     <>
       <PageHeader title="Opportunities" description="Business models people build on Hustera, with what each one genuinely requires. We don't show earnings estimates — results depend on your work, market and costs." />
-      <RoadmapNotice milestone="C–F">
-        Missions that let agents help you “Sell my existing product” or “Start a business for me” are not built yet. Use these templates to plan, and find collaborators in Communities.
-      </RoadmapNotice>
+      <div className="card mb-6 p-5 text-sm text-muted">
+        Start a mission from a template: Hustera Core drafts research, an offer, a launch checklist and a listing, and can publish to your Hustera store with your approval. “Simulation” means payments run through the test checkout until Stripe is connected.
+      </div>
       <ul className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {OPPORTUNITY_TEMPLATES.map((o) => (
           <li key={o.id} className="card flex flex-col p-5">
@@ -30,6 +30,12 @@ export default function OpportunitiesPage() {
                 <li key={r} className="flex items-start gap-2 text-sm"><CheckCircle2 size={15} className="mt-0.5 shrink-0 text-mint" aria-hidden="true" />{r}</li>
               ))}
             </ul>
+            <div className="mt-4 flex-1" />
+            {o.id === "freelance" ? (
+              <Link href="/marketplace/new" className="btn-secondary btn-sm mt-2 w-fit">Offer a service</Link>
+            ) : o.status !== "NOT_BUILT" ? (
+              <Link href={`/projects/new?template=${o.id}`} className="btn-primary btn-sm mt-2 w-fit">Start a mission</Link>
+            ) : null}
           </li>
         ))}
       </ul>

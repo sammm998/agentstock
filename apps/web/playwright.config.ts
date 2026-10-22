@@ -23,6 +23,6 @@ export default defineConfig({
     command: `npx next start -p ${PORT}`,
     url: `http://localhost:${PORT}`,
     reuseExistingServer: false,
-    env: { HUSTERA_DB: "memory", HUSTERA_ADMIN_EMAILS: "admin@e2e.test" },
+    env: { HUSTERA_DB: "memory", HUSTERA_ADMIN_EMAILS: "admin@e2e.test", HUSTERA_TEST_PAYMENTS: "true" },
   },
 });

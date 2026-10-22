@@ -142,6 +142,8 @@ export const missionSchema = z
     perDayCents: z.coerce.number().int().min(0).max(10000),
     perTaskCents: z.coerce.number().int().min(0).max(10000),
     ownershipConfirmed: z.boolean(),
+    priceCents: z.coerce.number().int().min(100, "Minimum price is €1").max(1_000_000),
+    externalChannel: z.boolean().default(false),
   })
   .refine((m) => m.kind !== "sell_existing" || m.ownershipConfirmed, { message: "Confirm that you own or are authorised to sell this product", path: ["ownershipConfirmed"] })
   .refine((m) => m.perDayCents <= m.totalCents && m.perTaskCents <= m.perDayCents, { message: "Limits must satisfy per task ≤ per day ≤ total", path: ["perDayCents"] });

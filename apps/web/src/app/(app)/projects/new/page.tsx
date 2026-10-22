@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { OPPORTUNITY_TEMPLATES } from "@hustera/domain";
 import { requireViewer } from "@/server/session";
 import { createMissionAction } from "@/app/actions";
 import { ActionForm } from "@/components/action-form";
@@ -6,8 +7,10 @@ import { PageHeader } from "@/components/ui";
 
 export const metadata: Metadata = { title: "New mission" };
 
-export default async function NewMissionPage() {
+export default async function NewMissionPage({ searchParams }: { searchParams: Promise<{ template?: string }> }) {
   await requireViewer();
+  const { template: templateId } = await searchParams;
+  const template = OPPORTUNITY_TEMPLATES.find((t) => t.id === templateId);
   return (
     <div className="mx-auto max-w-2xl">
       <PageHeader title="New mission" description="Hustera Core will plan the work and hand tasks to specialist agents. You stay in control of budget and approvals." />
@@ -16,22 +19,29 @@ export default async function NewMissionPage() {
           <legend className="label">What should we do?</legend>
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="flex cursor-pointer gap-3 rounded-xl border border-line p-4 has-[:checked]:border-indigo has-[:checked]:bg-indigo/10">
-              <input type="radio" name="kind" value="start_business" defaultChecked className="mt-1 accent-indigo" />
+              <input type="radio" name="kind" value="start_business" defaultChecked={template?.id !== "existing-product"} className="mt-1 accent-indigo" />
               <span><span className="block text-sm font-semibold">Start a business for me</span><span className="text-xs text-muted">Validate a new idea and prepare a first offer.</span></span>
             </label>
             <label className="flex cursor-pointer gap-3 rounded-xl border border-line p-4 has-[:checked]:border-indigo has-[:checked]:bg-indigo/10">
-              <input type="radio" name="kind" value="sell_existing" className="mt-1 accent-indigo" />
+              <input type="radio" name="kind" value="sell_existing" defaultChecked={template?.id === "existing-product"} className="mt-1 accent-indigo" />
               <span><span className="block text-sm font-semibold">Sell my existing product</span><span className="text-xs text-muted">Prepare offer, checklist and listing for something you own.</span></span>
             </label>
           </div>
         </fieldset>
         <div className="grid gap-4 sm:grid-cols-[2fr_1fr]">
-          <div><label className="label" htmlFor="title">Mission name</label><input id="title" name="title" required minLength={3} maxLength={80} placeholder="Printable study planners" className="input" /></div>
+          <div><label className="label" htmlFor="title">Mission name</label><input id="title" name="title" required minLength={3} maxLength={80} placeholder="Printable study planners" defaultValue={template && template.id !== "existing-product" ? template.name : undefined} className="input" /></div>
           <div><label className="label" htmlFor="region">Market</label><input id="region" name="region" required defaultValue="Sweden" maxLength={60} className="input" /></div>
         </div>
         <div>
           <label className="label" htmlFor="brief">Brief</label>
-          <textarea id="brief" name="brief" required minLength={10} maxLength={2000} rows={4} placeholder="What is the idea or product, who is it for, and what do you already have?" className="input" />
+          <textarea id="brief" name="brief" required minLength={10} maxLength={2000} rows={4} placeholder="What is the idea or product, who is it for, and what do you already have?" defaultValue={template ? `${template.summary} ` : undefined} className="input" />
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div><label className="label" htmlFor="price">Planned price (€)</label><input id="price" name="price" type="number" min={1} max={10000} step="0.01" defaultValue="9.00" required className="input" /></div>
+          <label className="flex items-start gap-3 self-end rounded-xl border border-line p-3 text-sm">
+            <input type="checkbox" name="externalChannel" className="mt-1 accent-indigo" />
+            <span>Also publish to my external store via Composio (needs a connection)</span>
+          </label>
         </div>
         <fieldset>
           <legend className="label">Budget limits (test mode)</legend>

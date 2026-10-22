@@ -29,6 +29,8 @@ export function ActionForm({ action, children, className, reset = false, showOk 
   return (
     <form
       ref={ref}
+      // Before hydration the browser posts straight to the server action, so early clicks still work.
+      action={action as unknown as (fd: FormData) => Promise<void>}
       className={className}
       aria-busy={pending}
       aria-label={rest["aria-label"]}
