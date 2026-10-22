@@ -157,3 +157,26 @@ export function parseProductMeta(html: string): { title: string | null; descript
   const title = meta("og:title") ?? html.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1] ?? null;
   return { title: decode(title)?.slice(0, 100) ?? null, description: decode(meta("og:description") ?? meta("description"))?.slice(0, 5000) ?? null };
 }
+
+// ---------------------------------------------------------------- community funding simulator (educational only)
+
+export interface SimParticipant {
+  name: string;
+  units: number;
+  /** Day (0-based) the participant joined, within the simulated period. */
+  joinedDay: number;
+}
+
+/**
+ * Educational simulation of time-weighted participation in a shared project.
+ * Nothing here is real money, a security or an offer: Hustera does not pool
+ * funds or distribute returns. Shares are units × days participated.
+ */
+export function simulateTimeWeightedShares(participants: SimParticipant[], periodDays: number, simulatedResult: number) {
+  const weights = participants.map((p) => Math.max(0, p.units) * Math.max(0, periodDays - Math.min(Math.max(0, p.joinedDay), periodDays)));
+  const total = weights.reduce((a, b) => a + b, 0);
+  return participants.map((p, i) => {
+    const share = total ? weights[i]! / total : 0;
+    return { name: p.name, weight: weights[i]!, share, simulatedAmount: Math.round(simulatedResult * share * 100) / 100 };
+  });
+}

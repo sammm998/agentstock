@@ -3,6 +3,7 @@ import type { PlatformRole, ProfileKind } from "@hustera/domain";
 import { q, one, tx } from "./db";
 import { UserError, audit, hashPassword, newToken, sha256, verifyPassword } from "./core";
 import { awardSparks } from "./sparks";
+import { sendEmail } from "./email";
 
 export const SESSION_TTL_DAYS = 30;
 
@@ -49,14 +50,26 @@ export async function registerUser(input: { email: string; password: string; han
   });
 }
 
+const LOGIN_WINDOW_MIN = 15;
+const LOGIN_MAX_FAILURES = 10;
+
 /** Returns the user id for valid credentials, or null. Always spends hashing time. */
 export async function authenticate(email: string, password: string): Promise<string | null> {
+  const key = sha256(`login:${email}`);
+  const [recent] = await q<{ n: number }>(
+    `select count(*)::int as n from audit_events where action = 'auth.failed' and target = $1 and created_at > now() - make_interval(mins => $2)`,
+    [key, LOGIN_WINDOW_MIN],
+  );
+  if ((recent?.n ?? 0) >= LOGIN_MAX_FAILURES) throw new UserError("Too many sign-in attempts. Wait 15 minutes or reset your password.");
   const user = await one<{ id: string; password_hash: string; suspended_at: Date | null }>(
     `select id, password_hash, suspended_at from users where lower(email) = $1`,
     [email],
   );
   const ok = await verifyPassword(password, user?.password_hash ?? "scrypt$16384$AAAAAAAAAAAAAAAAAAAAAA==$AAAA");
-  if (!user || !ok) return null;
+  if (!user || !ok) {
+    await q(`insert into audit_events (action, target) values ('auth.failed', $1)`, [key]);
+    return null;
+  }
   if (user.suspended_at) throw new UserError("This account is suspended. Contact support to appeal the decision.");
   return user.id;
 }
@@ -178,5 +191,38 @@ export async function deleteAccount(userId: string, password: string) {
     await db.query(`update channel_messages set body = '[deleted]', removed_at = now() where author_id = $1`, [userId]);
     await db.query(`delete from users where id = $1`, [userId]);
     await audit(db, null, "account.deleted");
+  });
+}
+
+/**
+ * Emails a single-use reset link valid for one hour. The response is the same
+ * whether or not the email exists, so accounts can't be enumerated.
+ */
+export async function requestPasswordReset(email: string, baseUrl: string) {
+  const user = await one<{ id: string }>(`select id from users where lower(email) = $1 and suspended_at is null`, [email]);
+  if (!user) return;
+  const [recent] = await q<{ n: number }>(`select count(*)::int as n from password_resets where user_id = $1 and created_at > now() - interval '1 hour'`, [user.id]);
+  if ((recent?.n ?? 0) >= 3) return;
+  const token = newToken();
+  await q(`insert into password_resets (user_id, token_hash, expires_at) values ($1, $2, now() + interval '1 hour')`, [user.id, sha256(token)]);
+  await sendEmail(
+    email,
+    "Reset your Hustera password",
+    `Someone asked to reset the password for your Hustera account.\n\nReset it here (valid for 1 hour):\n${baseUrl}/reset/${token}\n\nIf this wasn't you, you can ignore this email.`,
+  );
+}
+
+export async function resetPassword(token: string, password: string) {
+  const hash = await hashPassword(password);
+  await tx(async (db) => {
+    const [reset] = await db.query<{ id: string; user_id: string }>(
+      `select id, user_id from password_resets where token_hash = $1 and used_at is null and expires_at > now() for update`,
+      [sha256(token)],
+    );
+    if (!reset) throw new UserError("This reset link is invalid or has expired");
+    await db.query(`update password_resets set used_at = now() where id = $1`, [reset.id]);
+    await db.query(`update users set password_hash = $2 where id = $1`, [reset.user_id, hash]);
+    await db.query(`delete from sessions where user_id = $1`, [reset.user_id]);
+    await audit(db, reset.user_id, "password.reset");
   });
 }

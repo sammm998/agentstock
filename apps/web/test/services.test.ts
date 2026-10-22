@@ -198,3 +198,26 @@ describe("moderation", () => {
     expect(await getPost(reporter.id, p)).not.toBeNull();
   });
 });
+
+describe("account security", () => {
+  it("locks sign-in after repeated failures", async () => {
+    const u = await user();
+    for (let i = 0; i < 10; i++) expect(await authenticate(u.email, "wrong password!")).toBeNull();
+    await expect(authenticate(u.email, "correct horse battery")).rejects.toThrow(/Too many/);
+  });
+
+  it("resets a password with a single-use emailed token", async () => {
+    const { requestPasswordReset, resetPassword } = await import("@/server/accounts");
+    const { devOutbox } = await import("@/server/email");
+    const u = await user();
+    const { token } = await createSession(u.id);
+    await requestPasswordReset(u.email, "http://localhost");
+    await requestPasswordReset("nobody@example.test", "http://localhost");
+    const mail = (await devOutbox()).find((m) => m.to_email === u.email)!;
+    const resetToken = mail.body.match(/\/reset\/([\w-]+)/)![1]!;
+    await resetPassword(resetToken, "a brand new password");
+    await expect(resetPassword(resetToken, "another password!!")).rejects.toThrow(/invalid or has expired/);
+    expect(await viewerForToken(token)).toBeNull();
+    expect(await authenticate(u.email, "a brand new password")).toBe(u.id);
+  });
+});

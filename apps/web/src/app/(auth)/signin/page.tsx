@@ -22,7 +22,10 @@ export default async function SignIn({ searchParams }: { searchParams: Promise<{
           <input id="email" name="email" type="email" autoComplete="email" required className="input" />
         </div>
         <div>
-          <label className="label" htmlFor="password">Password</label>
+          <div className="flex items-center justify-between">
+            <label className="label" htmlFor="password">Password</label>
+            <Link href="/forgot" className="mb-1.5 text-xs text-muted hover:text-cloud">Forgot password?</Link>
+          </div>
           <input id="password" name="password" type="password" autoComplete="current-password" required className="input" />
         </div>
         <button className="btn-primary w-full">Sign in</button>

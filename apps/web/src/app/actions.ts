@@ -22,7 +22,7 @@ import {
   spaceSchema,
 } from "@hustera/domain";
 import { UserError, isUuid } from "@/server/core";
-import { authenticate, changePassword, deleteAccount, registerUser, updateProfile } from "@/server/accounts";
+import { authenticate, changePassword, deleteAccount, registerUser, requestPasswordReset, resetPassword, updateProfile } from "@/server/accounts";
 import { endSession, getViewer, requireViewer, startSession } from "@/server/session";
 import * as social from "@/server/social";
 import * as spaces from "@/server/spaces";
@@ -658,4 +658,23 @@ export async function revokeConnectionAction(fd: FormData): Promise<ActionState>
     const viewer = await requireViewer();
     await composio.revokeConnection(viewer.id, id(fd, "connectionId"));
   });
+}
+
+// ---------------------------------------------------------------- password reset
+
+export async function requestResetAction(fd: FormData): Promise<ActionState> {
+  return run(async () => {
+    const email = parse(emailSchema, str(fd, "email"));
+    await requestPasswordReset(email, await baseUrl());
+    return "If an account exists for that email, we've sent a reset link. It's valid for one hour.";
+  });
+}
+
+export async function resetPasswordAction(fd: FormData): Promise<ActionState> {
+  const r = await run(async () => {
+    const password = parse(passwordSchema, str(fd, "password"));
+    await resetPassword(str(fd, "token"), password);
+  });
+  if (r?.error) return r;
+  redirect("/signin?changed=1");
 }

@@ -17,7 +17,7 @@ export default async function CommunitiesPage() {
       <PageHeader
         title="Communities"
         description="Spaces are communities with channels, roles and moderators. Share ideas, get help, join projects and learn together."
-        actions={<Link href="/communities/new" className="btn-primary"><Plus size={16} aria-hidden="true" /> New Space</Link>}
+        actions={<><Link href="/communities/simulator" className="btn-secondary">Funding simulator</Link><Link href="/communities/new" className="btn-primary"><Plus size={16} aria-hidden="true" /> New Space</Link></>}
       />
       <section aria-labelledby="mine" className="mb-10">
         <h2 id="mine" className="eyebrow mb-3">Your Spaces</h2>

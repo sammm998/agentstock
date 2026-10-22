@@ -524,4 +524,30 @@ create table connected_accounts (
 );
 `,
   },
+  {
+    id: "004_account_security",
+    sql: /* sql */ `
+create table password_resets (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references users(id) on delete cascade,
+  token_hash text not null unique,
+  expires_at timestamptz not null,
+  used_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+create table email_outbox (
+  id uuid primary key default gen_random_uuid(),
+  to_email text not null,
+  subject text not null,
+  body text not null,
+  provider_message_id text,
+  error text,
+  sent_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+create index audit_events_action_target_idx on audit_events (action, target, created_at);
+`,
+  },
 ];

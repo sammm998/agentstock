@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeSettlement, costLines, isBalanced, isPrivateAddress, parseProductMeta, productSchema, refundLines, saleLines, simulatedFee } from "../src";
+import { computeSettlement, formatCents, simulateTimeWeightedShares, costLines, isBalanced, isPrivateAddress, parseProductMeta, productSchema, refundLines, saleLines, simulatedFee } from "../src";
 
 const zero = { revenueCents: 0, refundsCents: 0, paymentFeesCents: 0, cogsCents: 0, shippingCents: 0, advertisingCents: 0, toolsCents: 0, otherCents: 0, agentCostsCents: 0, lossCarryforwardCents: 0 };
 
@@ -52,5 +52,21 @@ describe("url import safety", () => {
   it("parses product meta tags", () => {
     const html = `<html><head><title>Fallback</title><meta property="og:title" content="Weekly Planner &amp; Notes"><meta name="description" content="A printable planner."></head></html>`;
     expect(parseProductMeta(html)).toEqual({ title: "Weekly Planner & Notes", description: "A printable planner." });
+  });
+});
+
+describe("funding simulator", () => {
+  it("weights participation by units and time", () => {
+    const r = simulateTimeWeightedShares([{ name: "A", units: 10, joinedDay: 0 }, { name: "B", units: 10, joinedDay: 15 }], 30, 300);
+    expect(r[0]!.share).toBeCloseTo(2 / 3);
+    expect(r[1]!.simulatedAmount).toBe(100);
+    expect(simulateTimeWeightedShares([{ name: "C", units: 5, joinedDay: 40 }], 30, 100)[0]!.share).toBe(0);
+  });
+});
+
+describe("formatting", () => {
+  it("never renders negative zero", () => {
+    expect(formatCents(-0)).toBe("€0.00");
+    expect(formatCents(-150)).toBe("-€1.50");
   });
 });

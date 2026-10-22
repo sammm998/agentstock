@@ -17,7 +17,8 @@ Statuses: `VERIFIED` (built and covered by automated tests) · `TESTED_SIMULATIO
 | Reports, moderation queue, appeals | VERIFIED | services + e2e |
 | Sparks earning rules, caps, reversals, ledger, disputes | VERIFIED | domain + services + e2e |
 | Data export and account deletion | VERIFIED | services + e2e |
-| Email verification, password reset | NEEDS_CONNECTION | Requires an email provider |
+| Password reset (single-use emailed token, 1 h expiry) and sign-in throttling | VERIFIED | services tests; email delivery NEEDS_CONNECTION (`RESEND_API_KEY`), otherwise kept in the outbox |
+| Email verification on sign-up | NOT_BUILT | Follows once an email provider is configured |
 | Media uploads (images/video in posts) | NOT_BUILT | Needs object storage + scanning |
 | Realtime push for chat | NOT_BUILT | Polling every 5–6 s today |
 
@@ -84,7 +85,8 @@ Statuses: `VERIFIED` (built and covered by automated tests) · `TESTED_SIMULATIO
 | --- | --- | --- |
 | G — Social and loyalty | Communities, Sparks, marketplace reviews | VERIFIED (Milestones A + E) |
 | H — Browser / desktop | Isolated browsers, Tauri companion | NOT_BUILT — needs a native app and a security review |
-| I — Regulated options | Card program, pooled funding | BLOCKED until licensed partners and legal authorisation |
+| I — Regulated options | Card program, real pooled funding | BLOCKED until licensed partners and legal authorisation |
+| Community funding simulator (section 11) | Time-weighted split of imaginary units, clearly labelled | TESTED_SIMULATION |
 | Background worker | `POST /api/cron/agents` with `CRON_SECRET` advances autonomous missions | VERIFIED (route), schedule NEEDS_CONNECTION |
 
 ## Integration inventory

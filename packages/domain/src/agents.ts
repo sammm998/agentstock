@@ -149,7 +149,8 @@ export function checkReservation(limits: BudgetLimits, usage: BudgetUsage, amoun
 }
 
 export function formatCents(cents: number, currency = "EUR"): string {
-  return new Intl.NumberFormat("en-IE", { style: "currency", currency }).format(cents / 100);
+  // Normalise -0 so empty totals don't render as "-€0.00".
+  return new Intl.NumberFormat("en-IE", { style: "currency", currency }).format((cents === 0 ? 0 : cents) / 100);
 }
 
 export const BUDGET_MAX_CENTS = 100_00;
