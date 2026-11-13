@@ -209,3 +209,18 @@ describe("product listing", () => {
     expect((await myProducts(other.id)).length).toBe(0);
   });
 });
+
+describe("events", () => {
+  it("creates events, tracks RSVPs and converts Stockholm time", async () => {
+    const { createEvent, upcomingEvents, toggleRsvp, parseStockholmLocal } = await import("@/server/events");
+    expect(parseStockholmLocal("2026-07-01T18:00").toISOString()).toBe("2026-07-01T16:00:00.000Z");
+    expect(parseStockholmLocal("2026-12-01T18:00").toISOString()).toBe("2026-12-01T17:00:00.000Z");
+    const host = await user();
+    const guest = await user();
+    const id = await createEvent(host.id, { title: "Launch Q&A", description: "", location: "Online", startsAt: new Date(Date.now() + 86400_000), spaceId: null });
+    expect(await toggleRsvp(guest.id, id)).toBe(true);
+    const ev = (await upcomingEvents(guest.id)).find((e) => e.id === id)!;
+    expect(ev).toMatchObject({ going: 2, attending: true });
+    await expect(createEvent(host.id, { title: "Past", description: "", location: "", startsAt: new Date(Date.now() - 86400_000), spaceId: null })).rejects.toThrow(/future/);
+  });
+});

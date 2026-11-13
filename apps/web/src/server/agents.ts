@@ -3,6 +3,7 @@ import {
   canOnPlatform,
   canTransition,
   checkReservation,
+  getAgent,
   getTool,
   planMission,
   type MissionKind,
@@ -16,6 +17,8 @@ import { q, one, tx } from "./db";
 import { UserError, audit } from "./core";
 import { executeTool } from "./agent-tools";
 
+const agentName = (id: string) => (id === "core" ? "Core" : (getAgent(id)?.name ?? id));
+
 const START_OF_UTC_DAY = `(date_trunc('day', now() at time zone 'UTC') at time zone 'UTC')`;
 
 export interface MissionRow {
@@ -28,6 +31,10 @@ export interface MissionRow {
   mode: MissionMode;
   price_cents: number;
   external_channel: boolean;
+  product_kind: "digital" | "physical" | "service";
+  delivery_content: string;
+  product_id: string | null;
+  agent_id: string | null;
   status: MissionStatus;
   status_reason: string;
   created_at: Date;
@@ -107,15 +114,20 @@ export async function setAgentsHalted(actor: { id: string; role: PlatformRole },
 
 export async function createMission(
   ownerId: string,
-  input: { kind: MissionKind; title: string; brief: string; region: string; mode: MissionMode; totalCents: number; perDayCents: number; perTaskCents: number; ownershipConfirmed: boolean; priceCents?: number; externalChannel?: boolean },
+  input: { kind: MissionKind; title: string; brief: string; region: string; mode: MissionMode; totalCents: number; perDayCents: number; perTaskCents: number; ownershipConfirmed: boolean; priceCents?: number; externalChannel?: boolean; productKind?: "digital" | "physical" | "service"; deliveryContent?: string; productId?: string | null; agentId?: string | null; templateId?: string | null },
 ): Promise<string> {
   const plan = planMission(input.kind, { externalChannel: input.externalChannel });
   return tx(async (db) => {
     const [active] = await db.query<{ n: number }>(`select count(*)::int as n from missions where owner_id = $1 and status in ('active','paused','blocked')`, [ownerId]);
     if ((active?.n ?? 0) >= 10) throw new UserError("You can have at most 10 open missions. Stop or complete one first.");
+    if (input.kind === "promote_product") {
+      const [owned] = await db.query(`select 1 from products p join stores s on s.id = p.store_id where p.id = $1 and s.owner_id = $2 and p.status = 'active'`, [input.productId, ownerId]);
+      if (!owned) throw new UserError("Choose one of your published products to promote");
+    }
     const [m] = await db.query<{ id: string }>(
-      `insert into missions (owner_id, kind, title, brief, region, mode, ownership_confirmed, price_cents, external_channel) values ($1, $2, $3, $4, $5, $6, $7, $8, $9) returning id`,
-      [ownerId, input.kind, input.title, input.brief, input.region, input.mode, input.ownershipConfirmed, input.priceCents ?? 900, input.externalChannel ?? false],
+      `insert into missions (owner_id, kind, title, brief, region, mode, ownership_confirmed, price_cents, external_channel, product_kind, delivery_content, product_id, agent_id, template_id)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) returning id`,
+      [ownerId, input.kind, input.title, input.brief, input.region, input.mode, input.ownershipConfirmed, input.priceCents ?? 900, input.externalChannel ?? false, input.productKind ?? "digital", input.deliveryContent ?? "", input.productId ?? null, input.agentId ?? null, input.templateId ?? null],
     );
     const missionId = m!.id;
     await db.query(`insert into budgets (mission_id, total_cents, per_day_cents, per_task_cents) values ($1, $2, $3, $4)`, [missionId, input.totalCents, input.perDayCents, input.perTaskCents]);
@@ -249,7 +261,7 @@ async function step(ownerId: string, missionId: string): Promise<StepResult> {
     );
     await setTaskStatus(db, runnable, "running");
     await db.query(`update tasks set attempts = attempts + 1 where id = $1`, [runnable.id]);
-    await event(db, { missionId, taskId: runnable.id, actor: "agent", from: "core", to: runnable.agent_id, kind: "dispatched", message: `${runnable.agent_id === "core" ? "Core is working on" : `Core → ${runnable.agent_id}:`} ${runnable.title} (reserved ${tool.maxCostCents}¢, test mode)` });
+    await event(db, { missionId, taskId: runnable.id, actor: "agent", from: "core", to: runnable.agent_id, kind: "dispatched", message: `${runnable.agent_id === "core" ? "Core is working on" : `Core → ${agentName(runnable.agent_id)}:`} ${runnable.title} (reserved ${tool.maxCostCents}¢, test mode)` });
 
     const inputs: Record<string, string> = {};
     const prior = await db.query<{ key: string; content: string }>(
@@ -258,7 +270,7 @@ async function step(ownerId: string, missionId: string): Promise<StepResult> {
     );
     for (const a of prior) inputs[a.key] = a.content;
 
-    const outcome = await executeTool(tool.id, { db, ownerId, missionId, kind: mission.kind, title: mission.title, brief: mission.brief, region: mission.region, priceCents: mission.price_cents, inputs });
+    const outcome = await executeTool(tool.id, { db, ownerId, missionId, kind: mission.kind, title: mission.title, brief: mission.brief, region: mission.region, priceCents: mission.price_cents, productKind: mission.product_kind, deliveryContent: mission.delivery_content, productId: mission.product_id, inputs });
     const running = { id: runnable.id, status: "running" as TaskStatus };
 
     if (outcome.ok) {
@@ -269,12 +281,12 @@ async function step(ownerId: string, missionId: string): Promise<StepResult> {
       );
       await db.query(`update budget_reservations set status = 'settled', settled_cents = $2, settled_at = now() where id = $1`, [reservation!.id, cost]);
       await setTaskStatus(db, running, "succeeded");
-      await event(db, { missionId, taskId: runnable.id, actor: "agent", from: runnable.agent_id, to: "core", kind: "result", message: `${runnable.agent_id === "core" ? "Core" : `${runnable.agent_id} → Core`}: ${outcome.result.message} (cost ${cost}¢${tool.simulated ? ", simulated" : ""})`, data: { artifactId: artifact!.id } });
+      await event(db, { missionId, taskId: runnable.id, actor: "agent", from: runnable.agent_id, to: "core", kind: "result", message: `${runnable.agent_id === "core" ? "Core" : `${agentName(runnable.agent_id)} → Core`}: ${outcome.result.message} (cost ${cost}¢${tool.simulated ? ", simulated" : ""})`, data: { artifactId: artifact!.id } });
     } else {
       await db.query(`update budget_reservations set status = 'released', settled_at = now() where id = $1`, [reservation!.id]);
       if (outcome.blocked) {
         await setTaskStatus(db, running, "blocked", outcome.reason);
-        await event(db, { missionId, taskId: runnable.id, actor: "agent", from: runnable.agent_id, to: "core", kind: "blocked", message: `${runnable.agent_id} → Core: cannot complete “${runnable.title}” — ${outcome.reason}` });
+        await event(db, { missionId, taskId: runnable.id, actor: "agent", from: runnable.agent_id, to: "core", kind: "blocked", message: `${agentName(runnable.agent_id)} → Core: cannot complete “${runnable.title}” — ${outcome.reason}` });
       } else {
         await setTaskStatus(db, running, "failed", outcome.error);
         await event(db, { missionId, taskId: runnable.id, actor: "agent", from: runnable.agent_id, to: "core", kind: "failed", message: `${runnable.title} failed: ${outcome.error}` });
@@ -337,4 +349,50 @@ export async function retryTask(ownerId: string, taskId: string) {
     await db.query(`update missions set status = 'active', status_reason = '' where id = $1 and status in ('blocked','paused')`, [task.mission_id]);
     await event(db, { missionId: task.mission_id, taskId, actor: "user", kind: "retry", message: `You retried “${task.title}”.` });
   });
+}
+
+/** Real sales of the products this mission created or promotes. */
+export async function missionResults(ownerId: string, missionId: string) {
+  const [r] = await q<{ products: number; live: number; paid: number; refunded: number; revenue_real: number; revenue_test: number; product_id: string | null; store_slug: string | null; product_status: string | null }>(
+    `with ps as (
+       select p.id, p.status, s.slug from products p join stores s on s.id = p.store_id join missions m on m.id = $2
+        where s.owner_id = $1 and (p.mission_id = m.id or p.id = m.product_id)
+     )
+     select (select count(*) from ps)::int as products,
+            (select count(*) from ps where status = 'active')::int as live,
+            (select count(*) from orders o where o.product_id in (select id from ps) and o.status = 'paid')::int as paid,
+            (select count(*) from orders o where o.product_id in (select id from ps) and o.status = 'refunded')::int as refunded,
+            coalesce((select sum(amount_cents) from orders o where o.product_id in (select id from ps) and o.status = 'paid' and not o.simulated), 0)::int as revenue_real,
+            coalesce((select sum(amount_cents) from orders o where o.product_id in (select id from ps) and o.status = 'paid' and o.simulated), 0)::int as revenue_test,
+            (select id from ps order by (status = 'active') desc limit 1) as product_id,
+            (select slug from ps limit 1) as store_slug,
+            (select status from ps order by (status = 'active') desc limit 1) as product_status`,
+    [ownerId, missionId],
+  );
+  return r!;
+}
+
+/** Real usage of each agent: missions started and products it put live. */
+export async function agentUsage() {
+  return q<{ agent_id: string; missions: number; live_products: number }>(
+    `select m.agent_id, count(distinct m.id)::int as missions,
+            count(distinct p.id) filter (where p.status = 'active')::int as live_products
+       from missions m left join products p on p.mission_id = m.id
+      where m.agent_id is not null group by m.agent_id`,
+  );
+}
+
+export async function templateUsage() {
+  return q<{ template_id: string; missions: number }>(`select template_id, count(*)::int as missions from missions where template_id is not null group by template_id`);
+}
+
+/** Real platform numbers for the home page. */
+export async function platformStats() {
+  const [r] = await q<{ members: number; missions: number; earnings_real: number; live_products: number }>(
+    `select (select count(*) from users where suspended_at is null)::int as members,
+            (select count(*) from missions)::int as missions,
+            coalesce((select sum(amount_cents) from orders where status = 'paid' and not simulated), 0)::int as earnings_real,
+            (select count(*) from products where status = 'active')::int as live_products`,
+  );
+  return r!;
 }

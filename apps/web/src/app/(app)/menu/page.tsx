@@ -11,7 +11,7 @@ export default async function MenuPage() {
   return (
     <div className="mx-auto max-w-md space-y-4">
       <nav aria-label="All sections" className="card p-3">
-        <SideNav moderator={canOnPlatform(viewer.role, "view_reports")} />
+        <SideNav moderator={canOnPlatform(viewer.role, "view_reports")} group="all" />
       </nav>
       <form action={signOutAction}>
         <button className="btn-secondary w-full">Sign out</button>

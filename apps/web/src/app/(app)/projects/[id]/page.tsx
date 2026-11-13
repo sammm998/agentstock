@@ -2,9 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { ArrowLeft, Bot, CheckCircle2, Circle, CircleAlert, Clock, OctagonX, Pause, Play, RotateCcw, User } from "lucide-react";
-import { MISSION_KIND_LABEL, formatCents, getTool, type TaskStatus } from "@hustera/domain";
+import { MISSION_KIND_LABEL, formatCents, getAgent, getTool, type TaskStatus } from "@hustera/domain";
 import { requireViewer } from "@/server/session";
-import { getMission } from "@/server/agents";
+import { getMission, missionResults } from "@/server/agents";
 import { isUuid } from "@/server/core";
 import { approvalAction, missionStateAction, retryTaskAction, runMissionAction } from "@/app/actions";
 import { ActionForm } from "@/components/action-form";
@@ -31,6 +31,7 @@ export default async function MissionPage({ params }: { params: Promise<{ id: st
   const data = await getMission(viewer.id, id);
   if (!data) notFound();
   const { mission, budget, tasks, events, artifacts, spend, halted } = data;
+  const results = await missionResults(viewer.id, mission.id);
   const open = mission.status !== "completed" && mission.status !== "stopped";
   const pct = budget.total_cents ? Math.min(100, Math.round((spend.committedCents / budget.total_cents) * 100)) : 0;
   const artifactByTask = new Map(artifacts.filter((a) => a.task_id).map((a) => [a.task_id!, a]));
@@ -99,7 +100,7 @@ export default async function MissionPage({ params }: { params: Promise<{ id: st
                         <TaskStatusText status={t.status} />
                       </div>
                       <p className="text-xs text-muted">
-                        Agent: {t.agent_id} · Tool: {tool?.name ?? t.tool_id} v{t.tool_version} · up to {tool?.maxCostCents ?? 0}¢{tool?.simulated ? " (simulated)" : ""}
+                        Agent: {getAgent(t.agent_id)?.name ?? (t.agent_id === "core" ? "Hustera Core" : t.agent_id)} · Tool: {tool?.name ?? t.tool_id} v{t.tool_version} · up to {tool?.maxCostCents ?? 0}¢{tool?.simulated ? " (simulated)" : ""}
                       </p>
                       {t.status_reason && <p className="mt-2 text-sm text-warning">{t.status_reason}</p>}
                       {t.status === "awaiting_approval" && (
@@ -132,6 +133,25 @@ export default async function MissionPage({ params }: { params: Promise<{ id: st
         </section>
 
         <aside className="space-y-6">
+          <section className="card border-mint/25 p-5" aria-labelledby="results-h">
+            <h2 id="results-h" className="font-semibold">Results</h2>
+            {results.products === 0 ? (
+              <p className="mt-2 text-sm text-muted">No product in your store yet. Results appear here once the agent publishes.</p>
+            ) : (
+              <>
+                <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
+                  <div><dt className="text-muted">Live products</dt><dd className="text-lg font-bold">{results.live}</dd></div>
+                  <div><dt className="text-muted">Paid orders</dt><dd className="text-lg font-bold">{results.paid}</dd></div>
+                  <div><dt className="text-muted">Real revenue</dt><dd className="text-lg font-bold text-mint">{formatCents(results.revenue_real)}</dd></div>
+                  <div><dt className="text-muted">Test revenue</dt><dd className="text-lg font-bold">{formatCents(results.revenue_test)}</dd></div>
+                </dl>
+                {results.refunded > 0 && <p className="mt-2 text-xs text-muted">{results.refunded} refunded</p>}
+                {results.product_id && results.store_slug && results.product_status === "active" && (
+                  <Link href={`/store/${results.store_slug}/${results.product_id}`} className="btn-secondary btn-sm mt-3 w-full">View product page</Link>
+                )}
+              </>
+            )}
+          </section>
           <section className="card p-5" aria-labelledby="budget-h">
             <div className="flex items-center justify-between">
               <h2 id="budget-h" className="font-semibold">Budget</h2>

@@ -133,7 +133,7 @@ export function extractMentions(text: string): string[] {
 
 export const missionSchema = z
   .object({
-    kind: z.enum(["start_business", "sell_existing"]),
+    kind: z.enum(["start_business", "sell_existing", "promote_product"]),
     title: z.string().trim().min(3, "Give the mission a name").max(80),
     brief: z.string().trim().min(10, "Describe your idea or product in a sentence or two").max(2000),
     region: z.string().trim().min(2).max(60),
@@ -144,6 +144,10 @@ export const missionSchema = z
     ownershipConfirmed: z.boolean(),
     priceCents: z.coerce.number().int().min(100, "Minimum price is €1").max(1_000_000),
     externalChannel: z.boolean().default(false),
+    productKind: z.enum(["digital", "physical", "service"]).default("digital"),
+    deliveryContent: z.string().trim().max(5000).default(""),
+    productId: z.string().uuid().nullable().default(null),
   })
+  .refine((m) => m.kind !== "promote_product" || m.productId, { message: "Choose a product to promote", path: ["productId"] })
   .refine((m) => m.kind !== "sell_existing" || m.ownershipConfirmed, { message: "Confirm that you own or are authorised to sell this product", path: ["ownershipConfirmed"] })
   .refine((m) => m.perDayCents <= m.totalCents && m.perTaskCents <= m.perDayCents, { message: "Limits must satisfy per task ≤ per day ≤ total", path: ["perDayCents"] });

@@ -550,4 +550,36 @@ create table email_outbox (
 create index audit_events_action_target_idx on audit_events (action, target, created_at);
 `,
   },
+  {
+    id: "005_agents_events",
+    sql: /* sql */ `
+alter table missions drop constraint missions_kind_check;
+alter table missions add constraint missions_kind_check check (kind in ('start_business','sell_existing','promote_product'));
+alter table missions add column product_kind text not null default 'digital' check (product_kind in ('digital','physical','service'));
+alter table missions add column delivery_content text not null default '';
+alter table missions add column product_id uuid references products(id) on delete set null;
+alter table missions add column agent_id text;
+alter table missions add column template_id text;
+
+create table events (
+  id uuid primary key default gen_random_uuid(),
+  host_id uuid not null references users(id) on delete cascade,
+  space_id uuid references spaces(id) on delete cascade,
+  title text not null check (char_length(title) between 3 and 100),
+  description text not null default '' check (char_length(description) <= 2000),
+  location text not null default '' check (char_length(location) <= 200),
+  starts_at timestamptz not null,
+  ends_at timestamptz,
+  created_at timestamptz not null default now()
+);
+create index events_starts_idx on events (starts_at);
+
+create table event_rsvps (
+  event_id uuid not null references events(id) on delete cascade,
+  user_id uuid not null references users(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (event_id, user_id)
+);
+`,
+  },
 ];

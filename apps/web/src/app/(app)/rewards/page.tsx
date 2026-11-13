@@ -5,7 +5,7 @@ import { SPARK_RULES, SPARK_TIERS } from "@hustera/domain";
 import { requireViewer } from "@/server/session";
 import { sparksLedger, sparksSummary } from "@/server/sparks";
 import { ReportMenu } from "@/components/post";
-import { LogoMark } from "@/components/brand";
+import { SparksCoin } from "@/components/visuals";
 import { PageHeader, TimeAgo } from "@/components/ui";
 
 export const metadata: Metadata = { title: "Rewards" };
@@ -18,13 +18,11 @@ export default async function RewardsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Rewards" description={<>Sparks are loyalty points for genuine contributions. They have <strong className="text-cloud">no cash value</strong> and can&apos;t be bought, sold, transferred or redeemed. <Link href="/legal/sparks" className="underline">Read the terms</Link>.</>} />
+      <PageHeader title="Sparks" description={<>Sparks are loyalty points for genuine contributions. They have <strong className="text-cloud">no cash value</strong> and can&apos;t be bought, sold, transferred or redeemed. <Link href="/legal/sparks" className="underline">Read the terms</Link>.</>} />
 
       <section className="relative overflow-hidden rounded-[20px] border border-mint/20 p-6 sm:p-8" style={{ background: "radial-gradient(500px 260px at 0% 50%, rgb(78 242 194 / 0.18), transparent 70%), #111c31" }}>
         <div className="flex flex-wrap items-center gap-6">
-          <div className="flex h-24 w-24 items-center justify-center rounded-full border-2 border-mint/60 bg-midnight shadow-[0_0_40px_rgb(78_242_194/0.35)]">
-            <LogoMark size={56} />
-          </div>
+          <SparksCoin size={120} />
           <div className="flex-1">
             <p className="eyebrow text-mint">Your Sparks</p>
             <p className="text-5xl font-extrabold">{summary.balance}</p>

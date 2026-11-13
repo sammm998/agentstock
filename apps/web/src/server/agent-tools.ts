@@ -1,5 +1,5 @@
 import "server-only";
-import type { MissionKind } from "@hustera/domain";
+import { extractTags, formatCents, type MissionKind } from "@hustera/domain";
 import type { Queryable } from "./db";
 import { createProduct, setProductStatus } from "./commerce";
 import { activeConnection, composioConfigured, executeComposioTool, publishTarget } from "./composio";
@@ -14,6 +14,9 @@ export interface ToolContext {
   brief: string;
   region: string;
   priceCents: number;
+  productKind: "digital" | "physical" | "service";
+  deliveryContent: string;
+  productId: string | null;
   /** Latest artifact content produced by each earlier task, keyed by task key. */
   inputs: Record<string, string>;
 }
@@ -157,17 +160,82 @@ async function generateProduct(ctx: ToolContext): Promise<ToolOutcome> {
 async function publishToStore(ctx: ToolContext): Promise<ToolOutcome> {
   const [store] = await ctx.db.query<{ id: string; slug: string }>(`select id, slug from stores where owner_id = $1`, [ctx.ownerId]);
   if (!store) return { ok: false, blocked: true, reason: "CONNECT_REQUIRED: you don't have a Hustera store yet. Create one under Store, then retry this task." };
-  const content = ctx.kind === "start_business" ? ctx.inputs.generate : undefined;
+  const generated = ctx.kind === "start_business" ? ctx.inputs.generate : undefined;
+  const kind = ctx.kind === "start_business" ? "digital" : ctx.productKind;
+  const delivery = generated ?? ctx.deliveryContent;
   const productId = await createProduct(
     ctx.ownerId,
-    { title: ctx.title.slice(0, 100), description: ctx.brief, kind: "digital", priceCents: ctx.priceCents, deliveryContent: content ?? "", ownershipConfirmed: true, source: "agent", missionId: ctx.missionId },
+    { title: ctx.title.slice(0, 100), description: ctx.brief, kind, priceCents: ctx.priceCents, deliveryContent: delivery, ownershipConfirmed: true, source: "agent", missionId: ctx.missionId },
     ctx.db,
   );
-  if (content) {
+  const canGoLive = kind !== "digital" || delivery.trim().length > 0;
+  if (canGoLive) {
     await setProductStatus(ctx.ownerId, productId, "active", ctx.db);
-    return { ok: true, result: { costCents: 0, message: "Product published to your Hustera store", artifact: { kind: "publication", title: "Published to store", content: `# Live in your store\n\nThe product is live at /store/${store.slug}/${productId}. Buyers receive the reviewed content immediately after payment.` } } };
+    return { ok: true, result: { costCents: 0, message: `Product live in your store at ${formatCents(ctx.priceCents)}`, artifact: { kind: "publication", title: "Live in your store", content: `# Live in your store\n\nThe product is live at /store/${store.slug}/${productId} for ${formatCents(ctx.priceCents)}.${kind === "digital" ? " Buyers receive the delivery content immediately after payment." : " You fulfil orders yourself; they appear under Store → Orders."}` } } };
   }
-  return { ok: true, result: { costCents: 0, message: "Draft product created in your store", artifact: { kind: "publication", title: "Draft product created", content: `# Draft product created\n\nA draft was added to your store. Open Store → Products to set the product type, add delivery details and publish it.\n\nProduct id: ${productId}` } } };
+  return { ok: true, result: { costCents: 0, message: "Draft product created in your store", artifact: { kind: "publication", title: "Draft product created", content: `# Draft product created\n\nA draft was added to your store, but a digital product needs delivery content (a download link or the content itself) before it can go live. Open Store → Products to add it and publish.\n\nProduct id: ${productId}` } } };
+}
+
+async function missionProduct(ctx: ToolContext) {
+  const [p] = await ctx.db.query<{ id: string; title: string; description: string; price_cents: number; currency: string; slug: string; status: string }>(
+    `select p.id, p.title, p.description, p.price_cents, p.currency, s.slug, p.status from products p join stores s on s.id = p.store_id
+      where s.owner_id = $1 and (p.id = $2 or p.mission_id = $3) order by (p.status = 'active') desc, p.created_at desc limit 1`,
+    [ctx.ownerId, ctx.productId, ctx.missionId],
+  );
+  return p ?? null;
+}
+
+function promoVariants(p: { title: string; description: string; price_cents: number; currency: string; slug: string; id: string }) {
+  const url = `/store/${p.slug}/${p.id}`;
+  const firstSentence = p.description.split(/(?<=[.!?])\s/)[0]!.slice(0, 180);
+  const tag = (p.title.toLowerCase().match(/[a-zåäö0-9]{4,}/g) ?? ["launch"])[0];
+  const price = formatCents(p.price_cents, p.currency);
+  return [
+    `Just launched: ${p.title} — ${firstSentence} ${price}. ${url} #${tag} #launch`,
+    `New in my store: ${p.title}. ${firstSentence} Questions? Reply here. ${url} #${tag}`,
+    `I've been working on ${p.title} and it's finally out (${price}). ${url} #buildinpublic #${tag}`,
+  ];
+}
+
+async function promoDrafts(ctx: ToolContext): Promise<ToolOutcome> {
+  const p = await missionProduct(ctx);
+  if (!p || p.status !== "active") return { ok: false, blocked: true, reason: "The product isn't live yet. Publish it in your store, then retry." };
+  let variants = promoVariants(p);
+  let model = "";
+  if (llmConfig().provider) {
+    try {
+      const r = await generateText(
+        "You write short, honest social posts announcing a product. No hype, no income or results claims, no fake scarcity. Max 260 characters each. Return exactly three posts separated by a line containing only ---.",
+        `Product: ${p.title}\nDescription: ${p.description.slice(0, 800)}\nPrice: ${formatCents(p.price_cents, p.currency)}\nLink to include: /store/${p.slug}/${p.id}`,
+        { maxTokens: 500 },
+      );
+      const parsed = r.text.split(/\n-{3,}\n/).map((x) => x.trim()).filter((x) => x.length > 20 && x.length <= 600);
+      if (parsed.length >= 1) {
+        variants = parsed.slice(0, 3).map((v) => (v.includes(`/store/${p.slug}/${p.id}`) ? v : `${v} /store/${p.slug}/${p.id}`));
+        model = ` with ${r.model}`;
+      }
+    } catch {
+      // Fall back to the template variants.
+    }
+  }
+  return {
+    ok: true,
+    result: {
+      costCents: model ? 5 : 2,
+      message: `Three promotion drafts written${model}`,
+      artifact: { kind: "promo_drafts", title: `Promotion drafts — ${p.title}`, content: `# Promotion drafts\n\nVariant A is posted when you approve the next step.\n\n${variants.map((v, i) => `## Variant ${"ABC"[i]}\n${v}`).join("\n\n")}` },
+    },
+  };
+}
+
+async function promotePost(ctx: ToolContext): Promise<ToolOutcome> {
+  const p = await missionProduct(ctx);
+  if (!p || p.status !== "active") return { ok: false, blocked: true, reason: "The product isn't live yet. Publish it in your store, then retry." };
+  const draft = (ctx.inputs.promo ?? "").match(/## Variant A\n([^\n]+)/)?.[1] ?? promoVariants(p)[0]!;
+  const body = draft.slice(0, 1000);
+  const [post] = await ctx.db.query<{ id: string }>(`insert into posts (author_id, body, visibility) values ($1, $2, 'public') returning id`, [ctx.ownerId, body]);
+  for (const tag of extractTags(body)) await ctx.db.query(`insert into post_tags (post_id, tag) values ($1, $2) on conflict do nothing`, [post!.id, tag]);
+  return { ok: true, result: { costCents: 0, message: "Announcement posted to your followers", artifact: { kind: "publication", title: "Posted to your feed", content: `# Posted\n\n${body}\n\nPost id: ${post!.id}` } } };
 }
 
 async function publishExternal(ctx: ToolContext): Promise<ToolOutcome> {
@@ -201,6 +269,10 @@ export async function executeTool(toolId: string, ctx: ToolContext): Promise<Too
       };
     case "hustera.publish_to_store":
       return publishToStore(ctx);
+    case "sandbox.promo_drafts":
+      return promoDrafts(ctx);
+    case "hustera.promote_post":
+      return promotePost(ctx);
     case "composio.publish_listing":
       return publishExternal(ctx);
     case "channel.publish_listing":

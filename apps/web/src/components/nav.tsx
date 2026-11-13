@@ -3,8 +3,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  BookOpen,
   Bot,
   Briefcase,
+  CalendarDays,
   Compass,
   CreditCard,
   FolderKanban,
@@ -30,17 +32,22 @@ interface NavItem {
 
 const PRIMARY_NAV: NavItem[] = [
   { href: "/home", label: "Home", icon: Home },
-  { href: "/discover", label: "Discover", icon: Compass },
-  { href: "/communities", label: "Communities", icon: Users },
-  { href: "/agents", label: "Agents", icon: Bot },
+  { href: "/communities", label: "Community", icon: Users },
+  { href: "/agents", label: "AI Agents", icon: Bot },
   { href: "/opportunities", label: "Opportunities", icon: Lightbulb },
-  { href: "/marketplace", label: "Marketplace", icon: Briefcase },
-  { href: "/store", label: "Store", icon: Store },
+  { href: "/marketplace", label: "Marketplace", icon: Store },
   { href: "/projects", label: "Projects", icon: FolderKanban },
-  { href: "/messages", label: "Messages", icon: MessageCircle },
   { href: "/wallet", label: "Wallet", icon: Wallet },
-  { href: "/rewards", label: "Rewards", icon: Sparkles },
   { href: "/card", label: "Hustera Card", icon: CreditCard },
+  { href: "/learn", label: "Learn", icon: BookOpen },
+  { href: "/events", label: "Events", icon: CalendarDays },
+];
+
+const MORE_NAV: NavItem[] = [
+  { href: "/discover", label: "Discover", icon: Compass },
+  { href: "/messages", label: "Messages", icon: MessageCircle },
+  { href: "/store", label: "My store", icon: Briefcase },
+  { href: "/rewards", label: "Sparks", icon: Sparkles },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
@@ -50,10 +57,11 @@ function isActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(href + "/") || (href === "/communities" && pathname.startsWith("/s/"));
 }
 
-export function SideNav({ unreadMessages = 0, moderator = false }: { unreadMessages?: number; moderator?: boolean }) {
+export function SideNav({ unreadMessages = 0, moderator = false, group = "primary" }: { unreadMessages?: number; moderator?: boolean; group?: "primary" | "more" | "all" }) {
   const pathname = usePathname();
-  const items = PRIMARY_NAV.map((i) => (i.href === "/messages" ? { ...i, badge: unreadMessages } : i));
-  if (moderator) items.push(MODERATION_NAV);
+  const base = group === "primary" ? PRIMARY_NAV : group === "more" ? MORE_NAV : [...PRIMARY_NAV, ...MORE_NAV];
+  const items = base.map((i) => (i.href === "/messages" ? { ...i, badge: unreadMessages } : i));
+  if (moderator && group !== "primary") items.push(MODERATION_NAV);
   return (
     <ul className="space-y-0.5">
       {items.map((item) => {

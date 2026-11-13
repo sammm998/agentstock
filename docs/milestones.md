@@ -79,11 +79,20 @@ Statuses: `VERIFIED` (built and covered by automated tests) · `TESTED_SIMULATIO
 | Tool execution + "Publish to external store" mission step | NEEDS_CONNECTION | Mocked tests; tool slug configurable |
 | Capability inventory incl. auth configs | NEEDS_CONNECTION | integration tests |
 
+## Agents you can use today
+
+| Agent | What it does end to end | Status |
+| --- | --- | --- |
+| EcomPro | Your product → research, offer, checklist, listing → live in your store (approval) → announced to followers (approval) → sales in mission Results and Wallet | VERIFIED (`test/agents.test.ts`, `e2e/agents.spec.ts`); real money needs Stripe |
+| ContentFlow | Promotion drafts (AI if configured, templates otherwise) → post to your followers after approval | VERIFIED; external networks NEEDS_CONNECTION |
+| DesignStudio | AI-written digital product → rights review → live → delivered after payment | NEEDS_CONNECTION (AI key); verified with a mocked model |
+| WebBuilder | Landing pages | NOT_BUILT |
+
 ## Other milestones
 
 | Milestone | Scope | Status |
 | --- | --- | --- |
-| G — Social and loyalty | Communities, Sparks, marketplace reviews | VERIFIED (Milestones A + E) |
+| G — Social and loyalty | Communities, Sparks, marketplace reviews, Events with RSVPs, Learn guides | VERIFIED |
 | H — Browser / desktop | Isolated browsers, Tauri companion | NOT_BUILT — needs a native app and a security review |
 | I — Regulated options | Card program, real pooled funding | BLOCKED until licensed partners and legal authorisation |
 | Community funding simulator (section 11) | Time-weighted split of imaginary units, clearly labelled | TESTED_SIMULATION |

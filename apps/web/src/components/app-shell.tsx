@@ -32,6 +32,11 @@ export async function AppShell({ children }: { children: ReactNode }) {
         <nav aria-label="Primary" className="flex-1 overflow-y-auto px-3 pb-6">
           <SideNav unreadMessages={counts.messages} moderator={moderator} />
           {viewer && (
+            <div className="mt-4 border-t border-line pt-4">
+              <SideNav unreadMessages={counts.messages} moderator={moderator} group="more" />
+            </div>
+          )}
+          {viewer && (
             <div className="mt-6">
               <div className="flex items-center justify-between px-3 pb-2">
                 <span className="eyebrow">Your Spaces</span>
@@ -43,7 +48,7 @@ export async function AppShell({ children }: { children: ReactNode }) {
                 <ul className="space-y-0.5">
                   {spaces.map((s) => (
                     <li key={s.id}>
-                      <SpaceLink href={`/s/${s.slug}`} label={s.name} />
+                      <SpaceLink href={`/s/${s.slug}`} label={s.slug} />
                     </li>
                   ))}
                 </ul>
@@ -74,7 +79,7 @@ export async function AppShell({ children }: { children: ReactNode }) {
               <label htmlFor="global-search" className="sr-only">
                 Search people, posts and spaces
               </label>
-              <input id="global-search" name="q" placeholder="Search people, posts, spaces…" className="input pl-9" />
+              <input id="global-search" name="q" placeholder="Search people, agents, opportunities…" className="input pl-9" />
             </form>
             <div className="ml-auto flex items-center gap-1 sm:ml-4">
               {viewer ? (

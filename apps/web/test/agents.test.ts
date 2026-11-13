@@ -1,8 +1,9 @@
 import { afterAll, describe, expect, it } from "vitest";
 import { registerUser } from "@/server/accounts";
-import { createMission, decideApproval, getMission, runMission, setAgentsHalted, setMissionState, retryTask } from "@/server/agents";
+import { agentUsage, createMission, decideApproval, getMission, missionResults, runMission, setAgentsHalted, setMissionState, retryTask } from "@/server/agents";
 import { getInventory } from "@/server/integrations";
-import { myProducts, saveStore } from "@/server/commerce";
+import { buyProduct, completeTestCheckout, createProduct, myProducts, saveStore, setProductStatus } from "@/server/commerce";
+import { profilePosts } from "@/server/social";
 import { resetDbForTests } from "@/server/db";
 
 let n = 0;
@@ -12,7 +13,7 @@ async function user() {
   return registerUser({ email: `${handle}@example.test`, password: "correct horse battery", handle, displayName: `Agent User ${n}` });
 }
 
-const base = { kind: "start_business" as "start_business" | "sell_existing", title: "Printable planners", brief: "Minimalist printable weekly planners for students", region: "Sweden", ownershipConfirmed: false };
+const base = { kind: "start_business" as "start_business" | "sell_existing" | "promote_product", title: "Printable planners", brief: "Minimalist printable weekly planners for students", region: "Sweden", ownershipConfirmed: false };
 
 afterAll(async () => {
   await resetDbForTests();
@@ -46,10 +47,66 @@ describe("agent runtime", () => {
     await retryTask(owner, publish.id);
     await runMission(owner, id);
     m = (await getMission(owner, id))!;
-    expect(m.mission.status).toBe("completed");
+    // A digital product without delivery content stays a draft, so promotion waits.
     const products = await myProducts(owner);
-    expect(products).toHaveLength(1);
     expect(products[0]).toMatchObject({ status: "draft", source: "agent", mission_id: id });
+    expect(m.tasks.find((t) => t.key === "promo")!.status).toBe("blocked");
+  });
+
+  it("EcomPro sells an existing product end to end: live, promoted, sold, reported", async () => {
+    const owner = await user();
+    await saveStore(owner, { name: "Eco shop", slug: `eco-${Math.random().toString(36).slice(2, 8)}`, description: "", sellerLegalName: "Eco Owner", sellerCountry: "SE", supportEmail: "help@example.test" });
+    const id = await createMission(owner, {
+      ...base, kind: "sell_existing", ownershipConfirmed: true, mode: "autonomous", totalCents: 500, perDayCents: 500, perTaskCents: 100,
+      title: "Budget meal planner", brief: "A printable 4-week budget meal planner with shopping lists.", priceCents: 790, productKind: "digital",
+      deliveryContent: "https://files.example.test/meal-planner.pdf", agentId: "ecompro",
+    });
+    await runMission(owner, id);
+    let m = (await getMission(owner, id))!;
+    for (const key of ["listing", "publish"]) {
+      m = (await getMission(owner, id))!;
+      await decideApproval(owner, m.tasks.find((t) => t.key === key)!.id, true);
+      await runMission(owner, id);
+    }
+    m = (await getMission(owner, id))!;
+    expect(m.tasks.find((t) => t.key === "promo")!.status).toBe("succeeded");
+    const post = m.tasks.find((t) => t.key === "post")!;
+    expect(post.status).toBe("awaiting_approval");
+    await decideApproval(owner, post.id, true);
+    await runMission(owner, id);
+    m = (await getMission(owner, id))!;
+    expect(m.mission.status).toBe("completed");
+
+    const [product] = await myProducts(owner);
+    expect(product).toMatchObject({ status: "active", price_cents: 790, kind: "digital" });
+    const feed = await profilePosts(owner, owner);
+    expect(feed[0]!.body).toContain(`/store/`);
+    expect(feed[0]!.body).toContain(product!.id);
+
+    const buyer = await user();
+    const { redirectUrl } = await buyProduct(product!.id, { id: buyer, email: "buyer@example.test" }, true, "http://localhost");
+    await completeTestCheckout(redirectUrl.split("/").pop()!);
+    const results = await missionResults(owner, id);
+    expect(results).toMatchObject({ live: 1, paid: 1, revenue_test: 790, revenue_real: 0 });
+    expect((await agentUsage()).find((u) => u.agent_id === "ecompro")).toMatchObject({ missions: 1, live_products: 1 });
+  });
+
+  it("ContentFlow promotes an existing product after approval", async () => {
+    const owner = await user();
+    await saveStore(owner, { name: "Promo shop", slug: `pr-${Math.random().toString(36).slice(2, 8)}`, description: "", sellerLegalName: "Promo Owner", sellerCountry: "SE", supportEmail: "help@example.test" });
+    const productId = await createProduct(owner, { title: "Habit tracker", description: "A simple printable habit tracker.", kind: "digital", priceCents: 300, deliveryContent: "https://files.example.test/h.pdf", ownershipConfirmed: true });
+    await expect(createMission(owner, { ...base, kind: "promote_product", mode: "autonomous", totalCents: 100, perDayCents: 100, perTaskCents: 50, productId })).rejects.toThrow(/published products/);
+    await setProductStatus(owner, productId, "active");
+    const other = await user();
+    await expect(createMission(other, { ...base, kind: "promote_product", mode: "autonomous", totalCents: 100, perDayCents: 100, perTaskCents: 50, productId })).rejects.toThrow(/published products/);
+    const id = await createMission(owner, { ...base, kind: "promote_product", mode: "autonomous", totalCents: 100, perDayCents: 100, perTaskCents: 50, productId, agentId: "contentflow" });
+    await runMission(owner, id);
+    let m = (await getMission(owner, id))!;
+    await decideApproval(owner, m.tasks.find((t) => t.key === "post")!.id, true);
+    await runMission(owner, id);
+    m = (await getMission(owner, id))!;
+    expect(m.mission.status).toBe("completed");
+    expect((await profilePosts(owner, owner))[0]!.body).toContain("Habit tracker");
   });
 
   it("generates an AI product, requires rights review and publishes it live", async () => {
@@ -72,6 +129,9 @@ describe("agent runtime", () => {
       await runMission(owner, id);
       m = (await getMission(owner, id))!;
       await decideApproval(owner, m.tasks.find((t) => t.key === "publish")!.id, true);
+      await runMission(owner, id);
+      m = (await getMission(owner, id))!;
+      await decideApproval(owner, m.tasks.find((t) => t.key === "post")!.id, true);
       await runMission(owner, id);
       m = (await getMission(owner, id))!;
       expect(m.mission.status).toBe("completed");

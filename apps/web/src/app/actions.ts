@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import {
+  OPPORTUNITY_TEMPLATES,
+  getAgent,
   channelSchema,
   costSchema,
   emailSchema,
@@ -32,6 +34,7 @@ import * as agents from "@/server/agents";
 import * as commerce from "@/server/commerce";
 import * as marketplace from "@/server/marketplace";
 import * as composio from "@/server/composio";
+import * as events from "@/server/events";
 import { markAllRead } from "@/server/notifications";
 import type { ActionState } from "@/components/action-form";
 
@@ -408,15 +411,20 @@ export async function createMissionAction(fd: FormData): Promise<ActionState> {
       title: str(fd, "title"),
       brief: str(fd, "brief"),
       region: str(fd, "region"),
-      mode: str(fd, "mode"),
+      mode: str(fd, "mode") || "approve_each",
       totalCents: euros("total"),
       perDayCents: euros("perDay"),
       perTaskCents: euros("perTask"),
       ownershipConfirmed: fd.get("ownershipConfirmed") === "on",
       priceCents: euros("price") || 900,
       externalChannel: fd.get("externalChannel") === "on",
+      productKind: str(fd, "productKind") || "digital",
+      deliveryContent: str(fd, "deliveryContent"),
+      productId: str(fd, "productId") || null,
     });
-    missionId = await agents.createMission(viewer.id, input);
+    const agentId = getAgent(str(fd, "agentId"))?.id ?? null;
+    const templateId = OPPORTUNITY_TEMPLATES.find((t) => t.id === str(fd, "templateId"))?.id ?? null;
+    missionId = await agents.createMission(viewer.id, { ...input, agentId, templateId });
   });
   if (r?.error) return r;
   redirect(`/projects/${missionId}`);
@@ -677,4 +685,35 @@ export async function resetPasswordAction(fd: FormData): Promise<ActionState> {
   });
   if (r?.error) return r;
   redirect("/signin?changed=1");
+}
+
+// ---------------------------------------------------------------- events
+
+export async function createEventAction(fd: FormData): Promise<ActionState> {
+  return run(async () => {
+    const viewer = await requireViewer();
+    const spaceId = str(fd, "spaceId");
+    await events.createEvent(viewer.id, {
+      title: str(fd, "title"),
+      description: str(fd, "description"),
+      location: str(fd, "location"),
+      startsAt: events.parseStockholmLocal(str(fd, "startsAt")),
+      spaceId: spaceId && isUuid(spaceId) ? spaceId : null,
+    });
+    return "Event created";
+  });
+}
+
+export async function rsvpAction(fd: FormData): Promise<ActionState> {
+  return run(async () => {
+    const viewer = await requireViewer();
+    return (await events.toggleRsvp(viewer.id, id(fd, "eventId"))) ? "You're going" : "RSVP removed";
+  });
+}
+
+export async function deleteEventAction(fd: FormData): Promise<ActionState> {
+  return run(async () => {
+    const viewer = await requireViewer();
+    await events.deleteEvent(viewer.id, id(fd, "eventId"));
+  });
 }

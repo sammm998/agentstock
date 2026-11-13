@@ -7,11 +7,11 @@ import { StatusBadge } from "@/components/ui";
 import type { FeatureStatus } from "@hustera/domain";
 
 const PILLARS: { icon: typeof Users; title: string; text: string; status: FeatureStatus }[] = [
-  { icon: Users, title: "Community", text: "Profiles, posts and Discord-style Spaces with channels, roles and moderation.", status: "VERIFIED" },
-  { icon: Sparkles, title: "Sparks", text: "Loyalty points for genuine contributions. No cash value, never sold.", status: "VERIFIED" },
-  { icon: Bot, title: "AI Agents", text: "Hustera Core and specialist agents that work within your budget and approvals.", status: "NOT_BUILT" },
-  { icon: TrendingUp, title: "Earn & Grow", text: "Sell existing products or start new ones, tracked with verified results.", status: "NOT_BUILT" },
-  { icon: CreditCard, title: "Hustera Card", text: "A design concept only. Not a payment card.", status: "NOT_BUILT" },
+  { icon: Users, title: "Community", text: "Connect & collaborate: profiles, posts, Spaces with channels, events and learning.", status: "VERIFIED" },
+  { icon: Sparkles, title: "SPARKS", text: "Our native reward points for contributions. No cash value, never sold.", status: "VERIFIED" },
+  { icon: Bot, title: "AI Agents", text: "Build or use powerful agents — EcomPro, ContentFlow and DesignStudio — within your budget and approvals.", status: "VERIFIED" },
+  { icon: TrendingUp, title: "Earn & Grow", text: "Real income opportunities: your own store, checkout and a marketplace, with verified results.", status: "VERIFIED" },
+  { icon: CreditCard, title: "Hustera Card", text: "Spend & unlock more — a design concept, not a payment card yet.", status: "NOT_BUILT" },
 ];
 
 export default async function Landing({ searchParams }: { searchParams: Promise<{ deleted?: string }> }) {
@@ -50,7 +50,7 @@ export default async function Landing({ searchParams }: { searchParams: Promise<
               Earn independently.
             </h1>
             <p className="mt-6 max-w-xl text-lg text-muted">
-              Hustera is where creators, freelancers and AI enthusiasts connect, share what they&apos;re building and collaborate — from people and ideas to real businesses.
+              The all-in-one community platform where people, AI agents and opportunities come together to create real income.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Link href="/signup" className="btn-primary px-6 py-3 text-base">

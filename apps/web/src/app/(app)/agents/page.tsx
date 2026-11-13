@@ -1,6 +1,8 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { Bot, Plug } from "lucide-react";
+import { agentUsage } from "@/server/agents";
+import { AgentIcon } from "@/components/visuals";
 import { AGENT_REGISTRY, type CapabilityStatus } from "@hustera/domain";
 import { getInventory } from "@/server/integrations";
 import { getViewer } from "@/server/session";
@@ -18,33 +20,42 @@ const CAP_STYLE: Record<CapabilityStatus, string> = {
 };
 
 export default async function AgentsPage() {
-  const [viewer, inventory] = await Promise.all([getViewer(), getInventory()]);
+  const [viewer, inventory, usage] = await Promise.all([getViewer(), getInventory(), agentUsage()]);
   return (
     <>
       <PageHeader
         title="AI Agents"
         description="Hustera Core plans missions and dispatches tasks to specialist agents — always within your budget limits and approvals, with every result recorded."
-        actions={viewer ? <Link href="/projects/new" className="btn-primary"><Bot size={16} aria-hidden="true" /> Start a mission</Link> : undefined}
+        actions={viewer ? <Link href="/agents/ecompro" className="btn-primary"><Bot size={16} aria-hidden="true" /> Start with EcomPro</Link> : undefined}
       />
       <div className="card mb-6 border-warning/25 p-5 text-sm text-muted">
-        <strong className="text-cloud">What runs today:</strong> agents marked <em>Simulation</em> use Hustera sandbox tools that turn your own brief into drafts — research plans, offer outlines, launch checklists and listings. They do not browse the web, contact anyone, publish or spend real money. Live tools arrive through Composio connections.
+        <strong className="text-cloud">How agents work:</strong> every agent runs inside a mission with your budget limits and approvals. Anything that publishes, posts or spends needs your OK first, and you can pause or stop at any time. Agents never promise income — they do the work, you see the real results in your wallet.
       </div>
 
-      <h2 className="eyebrow mb-3">Agent registry</h2>
+      <h2 className="eyebrow mb-3">Agents</h2>
       <ul className="mb-10 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {AGENT_REGISTRY.map((a) => (
-          <li key={a.id} className="card flex flex-col p-5">
-            <div className="flex items-start gap-3">
-              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-indigo/20 text-indigo-2"><Bot size={22} aria-hidden="true" /></span>
-              <div className="flex-1">
-                <h3 className="font-semibold">{a.name}</h3>
-                <p className="text-xs text-muted">{a.family} · Milestone {a.milestone}</p>
+        {AGENT_REGISTRY.map((a) => {
+          const u = usage.find((x) => x.agent_id === a.id);
+          return (
+            <li key={a.id} className="card flex flex-col p-5">
+              <div className="flex items-start gap-3">
+                <AgentIcon icon={a.icon} accent={a.accent} />
+                <div className="flex-1">
+                  <h3 className="font-semibold">{a.name}</h3>
+                  <p className="text-xs text-muted">{a.role}</p>
+                </div>
+                <StatusBadge status={a.status} />
               </div>
-              <StatusBadge status={a.status} />
-            </div>
-            <p className="mt-3 flex-1 text-sm text-muted">{a.summary}</p>
-          </li>
-        ))}
+              <p className="mt-3 flex-1 text-sm text-muted">{a.summary}</p>
+              {u && <p className="mt-3 text-xs text-muted">{u.missions} missions · {u.live_products} live products</p>}
+              {a.launch ? (
+                <Link href={`/agents/${a.id}`} className="btn-primary btn-sm mt-4">Use Agent</Link>
+              ) : (
+                <span className="btn-secondary btn-sm mt-4 cursor-default opacity-70">{a.status === "NOT_BUILT" ? "Coming soon" : "Runs inside missions"}</span>
+              )}
+            </li>
+          );
+        })}
       </ul>
 
       <section aria-labelledby="inv">

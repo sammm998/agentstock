@@ -99,12 +99,25 @@ export function KindChip({ kind }: { kind: string }) {
   return <span className="chip">{KIND_LABEL[kind] ?? kind}</span>;
 }
 
-/** Renders text with #tags and @mentions linked. */
+/** Renders text with #tags, @mentions, store links and https URLs linked. */
 export function RichText({ text }: { text: string }) {
-  const parts = text.split(/((?:^|(?<=[^\p{L}\p{N}_@]))[#@][\p{L}\p{N}_]{2,32})/u);
+  const parts = text.split(/(https?:\/\/[^\s<>()]+[^\s<>().,!?]|\/store\/[a-z0-9-]+\/[0-9a-f-]{36}|(?:^|(?<=[^\p{L}\p{N}_@]))[#@][\p{L}\p{N}_]{2,32})/u);
   return (
     <>
       {parts.map((part, i) => {
+        if (!part) return null;
+        if (/^https?:\/\//.test(part))
+          return (
+            <a key={i} href={part} target="_blank" rel="nofollow noopener noreferrer ugc" className="break-all text-[#b8b0ff] underline">
+              {part}
+            </a>
+          );
+        if (/^\/store\//.test(part))
+          return (
+            <Link key={i} href={part} className="font-medium text-mint underline">
+              View product →
+            </Link>
+          );
         if (/^#[\p{L}\p{N}_]{2,32}$/u.test(part))
           return (
             <Link key={i} href={`/discover?tag=${encodeURIComponent(part.slice(1).toLowerCase())}`} className="font-medium text-mint hover:underline">
