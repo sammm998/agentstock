@@ -7,6 +7,7 @@ import { getViewer } from "@/server/session";
 import { getMyStore, myProducts } from "@/server/commerce";
 import { llmConfig } from "@/server/llm";
 import { instantConfigured } from "@/server/instant";
+import { stripeConfigured } from "@/server/stripe-api";
 import { agentUsage } from "@/server/agents";
 import { createMissionAction } from "@/app/actions";
 import { ActionForm } from "@/components/action-form";
@@ -52,6 +53,7 @@ export default async function AgentPage({ params, searchParams }: { params: Prom
   const u = usage.find((x) => x.agent_id === agent.id);
   const llm = llmConfig();
   const instantOn = instantConfigured();
+  const stripeOn = stripeConfigured();
   const instantToolkits = INSTANT_CATALOG.filter((t) => t.usedBy.includes(agent.id));
 
   return (
@@ -79,7 +81,7 @@ export default async function AgentPage({ params, searchParams }: { params: Prom
         {viewer && agent.launch && (
           <section className="card p-6" aria-labelledby="use-h">
             <h2 id="use-h" className="text-lg font-semibold">Use {agent.name}</h2>
-            {!store && agent.launch !== "promote_product" && agent.launch !== "market_watch" && (
+            {!store && agent.launch !== "promote_product" && agent.launch !== "market_watch" && agent.launch !== "revenue_report" && (
               <p className="mt-2 rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-sm">You don&apos;t have a store yet. The agent will prepare everything and wait for you at the publishing step — or <Link href="/store" className="underline">create your store now</Link> (takes one minute).</p>
             )}
             {((agent.launch === "start_business" && !llm.provider) || (agent.launch === "market_watch" && !instantOn)) && (
@@ -90,7 +92,13 @@ export default async function AgentPage({ params, searchParams }: { params: Prom
               <input type="hidden" name="agentId" value={agent.id} />
               {template && <input type="hidden" name="templateId" value={template.id} />}
               <input type="hidden" name="region" value="Sweden" />
-              {agent.launch === "market_watch" ? (
+              {agent.launch === "revenue_report" ? (
+                <>
+                  <input type="hidden" name="title" value="Revenue report" />
+                  <input type="hidden" name="brief" value="Report my verified revenue, costs and Stripe balance." />
+                  <p className="text-sm text-muted">RevenueDesk reads your ledger{stripeOn ? " and your Stripe account" : ""} and writes a report. It only reads — it never moves money.</p>
+                </>
+              ) : agent.launch === "market_watch" ? (
                 <>
                   <input type="hidden" name="title" value="Market snapshot" />
                   <div>
@@ -156,13 +164,13 @@ export default async function AgentPage({ params, searchParams }: { params: Prom
       </div>
 
       <aside className="space-y-4">
-        {agent.launch !== "market_watch" && <section className="card p-5 text-sm">
+        {(agent.launch === "sell_existing" || agent.launch === "start_business") && <section className="card p-5 text-sm">
           <h2 className="font-semibold">How {agent.name} earns with you</h2>
           <ol className="mt-3 list-decimal space-y-2 pl-5 text-muted">
             <li>You describe the product and set a price and budget.</li>
             <li>The agent prepares research, offer, checklist and listing.</li>
             <li>You approve — it goes live in your store and is announced.</li>
-            <li>Buyers pay through the checkout; money goes to you via the payment provider.</li>
+            <li>{stripeOn ? "It creates a Stripe Payment Link you can share anywhere — buyers pay, money lands in your Stripe." : "Buyers pay through the checkout; with Stripe connected, the agent also creates a shareable Payment Link."}</li>
             <li>Every sale, refund and cost shows up in your wallet.</li>
           </ol>
           <p className="mt-3 text-xs text-muted">No guaranteed results. Real payments need Stripe connected; until then sales run through the labelled test checkout.</p>

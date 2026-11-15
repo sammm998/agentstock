@@ -17,7 +17,8 @@ import type { Queryable } from "./db";
 import { q, one, tx } from "./db";
 import { UserError, audit, newToken } from "./core";
 import { notify } from "./notifications";
-import { createStripeCheckout, providerStatus, stripeRefund } from "./payments";
+import { createStripeCheckout, providerStatus, stripeRefund, testPaymentsAllowed } from "./payments";
+import { sendEmail } from "./email";
 
 export interface Store {
   id: string;
@@ -204,14 +205,21 @@ export async function createOrder(
   const status = providerStatus();
   if (!status.provider) throw new UserError(`Checkout is unavailable: ${status.reason}`);
   if (input.buyerId && input.buyerId === input.sellerId) throw new UserError("You can't buy from yourself");
+  let provider = status.provider;
+  // The configured Stripe account belongs to the platform operator. Other sellers need Stripe Connect,
+  // otherwise their customers' money would land in the operator's account.
+  if (provider === "stripe" && !(await stripeSellerAllowed({ query: q }, input.sellerId))) {
+    if (testPaymentsAllowed()) provider = "test";
+    else throw new UserError("Card payments for this seller need Stripe Connect, which isn't set up yet");
+  }
   const token = newToken(24);
   const [order] = await q<{ id: string }>(
     `insert into orders (kind, product_id, contract_id, seller_id, buyer_id, buyer_email, title, amount_cents, provider, simulated, access_token, withdrawal_waiver)
      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) returning id`,
-    [input.kind, input.productId ?? null, input.contractId ?? null, input.sellerId, input.buyerId, input.buyerEmail, input.title, input.amountCents, status.provider, status.provider === "test", token, input.withdrawalWaiver],
+    [input.kind, input.productId ?? null, input.contractId ?? null, input.sellerId, input.buyerId, input.buyerEmail, input.title, input.amountCents, provider, provider === "test", token, input.withdrawalWaiver],
   );
   const orderId = order!.id;
-  if (status.provider === "test") return { orderId, redirectUrl: `/checkout/test/${token}` };
+  if (provider === "test") return { orderId, redirectUrl: `/checkout/test/${token}` };
   const session = await createStripeCheckout({
     orderId,
     title: input.title,
@@ -305,8 +313,8 @@ export async function recordCost(ownerId: string, input: { category: "cogs" | "s
 
 // ---------------------------------------------------------------- financials
 
-export async function financials(ownerId: string, simulated: boolean) {
-  const rows = await q<{ account: string; total: number }>(
+export async function financials(ownerId: string, simulated: boolean, db: Queryable = { query: q }) {
+  const rows = await db.query<{ account: string; total: number }>(
     `select account, coalesce(sum(amount_cents), 0)::int as total from ledger_entries where owner_id = $1 and simulated = $2 group by account`,
     [ownerId, simulated],
   );
@@ -331,4 +339,43 @@ export async function ledgerEntries(ownerId: string, limit = 100) {
     `select id, entry_group, account, amount_cents, memo, simulated, created_at from ledger_entries where owner_id = $1 order by id desc limit $2`,
     [ownerId, limit],
   );
+}
+
+/** Whether a seller's sales may go through the platform's own Stripe account. */
+export async function stripeSellerAllowed(db: Queryable, sellerId: string): Promise<boolean> {
+  if (process.env.STRIPE_CONNECT_ENABLED === "true") return true;
+  const [u] = await db.query<{ platform_role: string }>(`select platform_role from users where id = $1`, [sellerId]);
+  return u?.platform_role === "admin";
+}
+
+/**
+ * Records a sale made through a Stripe Payment Link (created by EcomPro). Called
+ * only from the verified Stripe webhook. Idempotent per Checkout Session.
+ */
+export async function recordPaymentLinkSale(
+  s: { sessionId: string; paymentIntentId: string; amountCents: number; currency: string; email: string; livemode: boolean; productId?: string | null; paymentLinkId?: string | null; feeCents: number | null },
+  base: string,
+) {
+  const product = await one<Product & { owner_id: string }>(
+    `select p.*, st.owner_id from products p join stores st on st.id = p.store_id
+      where ($1::uuid is not null and p.id = $1::uuid) or ($2::text is not null and p.stripe_payment_link_id = $2::text) limit 1`,
+    [s.productId && /^[0-9a-f-]{36}$/i.test(s.productId) ? s.productId : null, s.paymentLinkId ?? null],
+  );
+  if (!product) return null;
+  const existing = await one<{ id: string }>(`select id from orders where provider_session_id = $1`, [s.sessionId]);
+  if (existing) return existing.id;
+  const token = newToken(24);
+  const [order] = await q<{ id: string }>(
+    `insert into orders (kind, product_id, seller_id, buyer_email, title, amount_cents, currency, provider, provider_session_id, simulated, access_token, withdrawal_waiver)
+     values ('product', $1, $2, $3, $4, $5, $6, 'stripe', $7, $8, $9, $10) on conflict (provider_session_id) do nothing returning id`,
+    [product.id, product.owner_id, s.email, product.title, s.amountCents, s.currency.toUpperCase(), s.sessionId, !s.livemode, token, product.kind === "digital"],
+  );
+  if (!order) return null;
+  await markOrderPaid(order.id, { paymentId: s.paymentIntentId, feeCents: s.feeCents });
+  await sendEmail(s.email, `Your order: ${product.title}`, `Thanks for your purchase!\n\nAccess your order and delivery here:\n${base}/orders/${token}\n\nQuestions? Reply to the seller via the order page.`);
+  return order.id;
+}
+
+export async function orderBySession(sessionId: string) {
+  return one<{ access_token: string }>(`select access_token from orders where provider_session_id = $1`, [sessionId]);
 }

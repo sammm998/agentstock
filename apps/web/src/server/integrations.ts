@@ -4,6 +4,7 @@ import { llmConfig } from "./llm";
 import { providerStatus } from "./payments";
 import { authConfigs } from "./composio";
 import { instantConfigured } from "./instant";
+import { stripeConfigured } from "./stripe-api";
 
 export interface CapabilityRow {
   id: string;
@@ -48,12 +49,13 @@ export async function getInventory(opts: { fetchImpl?: typeof fetch; apiKey?: st
   }
 
   const llm = llmConfig();
-  const PROVIDER_LABEL = { sandbox: "Hustera sandbox", hustera: "Hustera", llm: llm.provider ? `AI model (${llm.provider})` : "AI model", composio: "Composio", instant: "Composio Instant" } as const;
+  const PROVIDER_LABEL = { sandbox: "Hustera sandbox", hustera: "Hustera", llm: llm.provider ? `AI model (${llm.provider})` : "AI model", composio: "Composio", instant: "Composio Instant", stripe: "Stripe" } as const;
   const capabilities: CapabilityRow[] = TOOL_REGISTRY.filter((t) => t.id !== "channel.publish_listing").map((t) => {
     let status: CapabilityStatus;
     if (t.provider === "llm") status = llm.provider ? "READY" : "CONNECT_REQUIRED";
     else if (t.provider === "composio") status = "CONNECT_REQUIRED";
     else if (t.provider === "instant") status = instantConfigured() ? "PARTIAL" : "CONNECT_REQUIRED";
+    else if (t.provider === "stripe") status = t.id === "stripe.revenue_report" ? "READY" : stripeConfigured() ? "PARTIAL" : "CONNECT_REQUIRED";
     else status = t.requiresApproval ? "APPROVAL_REQUIRED" : "READY";
     return {
       id: `${t.id}@${t.version}`,

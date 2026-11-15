@@ -10,7 +10,7 @@ export const STATUS_LABEL: Record<FeatureStatus, string> = {
   NOT_BUILT: "Not built yet",
 };
 
-export type AgentLaunch = "sell_existing" | "start_business" | "promote_product" | "market_watch";
+export type AgentLaunch = "sell_existing" | "start_business" | "promote_product" | "market_watch" | "revenue_report";
 
 export interface AgentDefinition {
   id: string;
@@ -43,7 +43,7 @@ export const AGENT_REGISTRY: readonly AgentDefinition[] = [
   {
     id: "ecompro", name: "EcomPro", role: "E-commerce agent", family: "Commerce", icon: "bag", accent: "#6558F5", featured: true, launch: "sell_existing", milestone: "C", status: "VERIFIED",
     summary: "Sells a product you own: prepares the offer and listing, publishes it to your store, promotes it to your followers and tracks real sales.",
-    capabilities: ["Researches buyers and competitors on the live web (Composio Instant: Tavily, Exa, Serper, SerpApi, Firecrawl)", "Checks competitor prices (SerpApi Google Shopping) and finds keywords (DataForSEO, Semrush)", "Builds the offer, launch checklist and an AI-written listing (Gemini, OpenAI or OpenRouter)", "Publishes to your Hustera store after your approval", "Announces it to your followers after your approval", "Tracks orders, revenue and refunds in your wallet"],
+    capabilities: ["Creates a shareable Stripe Payment Link — money goes straight to your Stripe", "Researches buyers and competitors on the live web (Composio Instant: Tavily, Exa, Serper, SerpApi, Firecrawl)", "Checks competitor prices (SerpApi Google Shopping) and finds keywords (DataForSEO, Semrush)", "Builds the offer, launch checklist and an AI-written listing (Gemini, OpenAI or OpenRouter)", "Publishes to your Hustera store after your approval", "Announces it to your followers after your approval", "Tracks orders, revenue and refunds in your wallet"],
   },
   {
     id: "contentflow", name: "ContentFlow", role: "Social media agent", family: "Marketing", icon: "play", accent: "#FF5C8A", featured: true, launch: "promote_product", milestone: "F", status: "VERIFIED",
@@ -66,7 +66,7 @@ export const AGENT_REGISTRY: readonly AgentDefinition[] = [
   { id: "research", name: "Market Research", role: "Research agent", family: "Research", icon: "search", accent: "#2FA8FF", milestone: "F", status: "NEEDS_CONNECTION", summary: "Searches the live web and summarises demand and competitors with sources, inside every product mission.", capabilities: ["Web search via Tavily, Exa, Serper or SerpApi", "Summary with cited sources via Gemini/OpenAI", "Offline research plan when Composio is unavailable"], needs: "Composio Instant (COMPOSIO_API_KEY)" },
   { id: "seo", name: "SEO", role: "Search agent", family: "Marketing", icon: "trend", accent: "#FFC861", milestone: "F", status: "NEEDS_CONNECTION", summary: "Finds the keywords buyers search for and works them into your listing and posts.", capabilities: ["Keyword ideas via DataForSEO or Semrush", "Feeds the listing writer"], needs: "Composio Instant (COMPOSIO_API_KEY)" },
   { id: "support", name: "Support", role: "Customer service agent", family: "Operations", icon: "chat", accent: "#8893AD", milestone: "C", status: "NOT_BUILT", summary: "Drafts replies to customer questions, returns and refunds.", capabilities: [] },
-  { id: "finance", name: "Finance", role: "Bookkeeping agent", family: "Operations", icon: "ledger", accent: "#8893AD", milestone: "C", status: "NOT_BUILT", summary: "Reconciles verified payments, costs and refunds into a profit ledger.", capabilities: [] },
+  { id: "finance", name: "RevenueDesk", role: "Revenue & bookkeeping agent", family: "Operations", icon: "ledger", accent: "#4EF2C2", featured: false, launch: "revenue_report", milestone: "C", status: "VERIFIED", summary: "Reports what you actually earned: verified sales, refunds, costs and profit from your ledger, plus your live Stripe balance and latest payments.", capabilities: ["Profit report from your double-entry ledger", "Live Stripe balance and latest payments (when Stripe is connected)", "Platform-fee preview with loss carry-forward"], needs: "Stripe figures need STRIPE_SECRET_KEY" },
   { id: "markets", name: "MarketWatch", role: "Stock & crypto research", family: "Research", icon: "chart", accent: "#F7931A", milestone: "F", status: "NEEDS_CONNECTION", launch: "market_watch", summary: "Fetches current crypto and stock prices for a watchlist. Information only — no trading, no advice, no custody.", capabilities: ["Crypto prices via CoinGecko", "Stock quotes via Finnhub or Alpha Vantage", "Never trades or moves money"], needs: "Composio Instant (COMPOSIO_API_KEY)" },
 ];
 

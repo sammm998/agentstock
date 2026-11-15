@@ -22,10 +22,14 @@ export function providerStatus(): ProviderStatus {
     }
     return { provider: "stripe", reason: key.startsWith("sk_test_") ? "Stripe test mode" : "Stripe live mode" };
   }
-  if (process.env.NODE_ENV !== "production" || process.env.HUSTERA_TEST_PAYMENTS === "true") {
+  if (testPaymentsAllowed()) {
     return { provider: "test", reason: "Simulated test payments — no money moves" };
   }
   return { provider: null, reason: "No payment provider is configured." };
+}
+
+export function testPaymentsAllowed() {
+  return process.env.NODE_ENV !== "production" || process.env.HUSTERA_TEST_PAYMENTS === "true";
 }
 
 let stripeClient: Stripe | null = null;

@@ -1,4 +1,4 @@
-import { markOrderPaid, recordPaymentEvent } from "@/server/commerce";
+import { markOrderPaid, recordPaymentEvent, recordPaymentLinkSale } from "@/server/commerce";
 import { stripeFeeFor, verifyStripeEvent } from "@/server/payments";
 
 /**
@@ -23,6 +23,22 @@ export async function POST(req: Request) {
     const paymentIntent = typeof session.payment_intent === "string" ? session.payment_intent : session.payment_intent?.id;
     if (orderId && paymentIntent && session.payment_status === "paid") {
       await markOrderPaid(orderId, { paymentId: paymentIntent, feeCents: await stripeFeeFor(paymentIntent) });
+    } else if (!orderId && paymentIntent && session.payment_status === "paid" && session.payment_link) {
+      // A sale through an agent-created Payment Link: there is no Hustera order yet.
+      await recordPaymentLinkSale(
+        {
+          sessionId: session.id,
+          paymentIntentId: paymentIntent,
+          amountCents: session.amount_total ?? 0,
+          currency: session.currency ?? "eur",
+          email: session.customer_details?.email ?? "unknown@stripe.invalid",
+          livemode: session.livemode,
+          productId: session.metadata?.hustera_product_id ?? null,
+          paymentLinkId: typeof session.payment_link === "string" ? session.payment_link : session.payment_link.id,
+          feeCents: await stripeFeeFor(paymentIntent),
+        },
+        (process.env.HUSTERA_BASE_URL ?? new URL(req.url).origin).replace(/\/$/, ""),
+      );
     }
   }
   return Response.json({ received: true });

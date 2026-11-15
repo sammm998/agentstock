@@ -2,7 +2,8 @@ import "server-only";
 import { extractTags, findPrices, findResults, findUrls, formatCents, median, type MissionKind } from "@hustera/domain";
 import { InstantUnavailable, instantConfigured, runInstant } from "./instant";
 import type { Queryable } from "./db";
-import { createProduct, setProductStatus } from "./commerce";
+import { createProduct, financials, setProductStatus, stripeSellerAllowed } from "./commerce";
+import { createPaymentLink, stripeConfigured, stripeOverview } from "./stripe-api";
 import { activeConnection, composioConfigured, executeComposioTool, publishTarget } from "./composio";
 import { generateText, llmConfig } from "./llm";
 
@@ -446,6 +447,70 @@ async function listingDraft(ctx: ToolContext): Promise<ToolOutcome> {
   }
 }
 
+async function stripePaymentLink(ctx: ToolContext): Promise<ToolOutcome> {
+  if (!stripeConfigured()) return skipped("Stripe payment link", "Stripe is not connected (STRIPE_SECRET_KEY)");
+  if (!(await stripeSellerAllowed(ctx.db, ctx.ownerId))) return skipped("Stripe payment link", "only the platform owner's products can use the platform Stripe account until Stripe Connect is set up");
+  const base = process.env.HUSTERA_BASE_URL?.replace(/\/$/, "");
+  if (!base) return skipped("Stripe payment link", "HUSTERA_BASE_URL is not set, so buyers couldn't be sent back to their order");
+  const [p] = await ctx.db.query<{ id: string; title: string; description: string; price_cents: number; currency: string; image_url: string | null; status: string; stripe_payment_link_url: string | null }>(
+    `select p.id, p.title, p.description, p.price_cents, p.currency, p.image_url, p.status, p.stripe_payment_link_url from products p join stores s on s.id = p.store_id
+      where s.owner_id = $1 and (p.id = $2 or p.mission_id = $3) order by (p.status = 'active') desc, p.created_at desc limit 1`,
+    [ctx.ownerId, ctx.productId, ctx.missionId],
+  );
+  if (!p || p.status !== "active") return skipped("Stripe payment link", "the product isn't live yet");
+  if (p.stripe_payment_link_url) return { ok: true, result: { costCents: 0, message: "Payment link already exists", artifact: { kind: "payment_link", title: "Stripe payment link", content: `# Stripe payment link\n\n${p.stripe_payment_link_url}` } } };
+  try {
+    const link = await createPaymentLink({ id: p.id, title: p.title, description: p.description, priceCents: p.price_cents, currency: p.currency, imageUrl: p.image_url }, { base });
+    await ctx.db.query(`update products set stripe_product_id = $2, stripe_price_id = $3, stripe_payment_link_id = $4, stripe_payment_link_url = $5 where id = $1`, [p.id, link.productId, link.priceId, link.linkId, link.url]);
+    return {
+      ok: true,
+      result: {
+        costCents: 0,
+        message: `Stripe payment link created (${link.livemode ? "live" : "test mode"})`,
+        artifact: { kind: "payment_link", title: "Stripe payment link", content: `# Stripe payment link\n\n${link.url}\n\nShare this link anywhere — payments go straight to your Stripe balance (${link.livemode ? "live" : "test mode"}). Sales are recorded in your Hustera wallet automatically.` },
+      },
+    };
+  } catch (e) {
+    return { ok: false, blocked: false, error: e instanceof Error ? e.message : "Stripe request failed" };
+  }
+}
+
+async function revenueReport(ctx: ToolContext): Promise<ToolOutcome> {
+  const real = await financials(ctx.ownerId, false, ctx.db);
+  const test = await financials(ctx.ownerId, true, ctx.db);
+  const [orders] = await ctx.db.query<{ paid: number; refunded: number }>(
+    `select count(*) filter (where status = 'paid')::int as paid, count(*) filter (where status = 'refunded')::int as refunded from orders where seller_id = $1 and not simulated`,
+    [ctx.ownerId],
+  );
+  const i = real.inputs;
+  const lines = [
+    "# Revenue report",
+    `_Generated ${new Date().toISOString().slice(0, 16).replace("T", " ")} UTC from verified ledger entries${stripeConfigured() ? " and your Stripe account" : ""}._`,
+    "## Hustera ledger (real money)",
+    `| | Amount |\n| --- | --- |\n| Revenue | ${formatCents(i.revenueCents)} |\n| Refunds | ${formatCents(-i.refundsCents)} |\n| Payment fees | ${formatCents(-i.paymentFeesCents)} |\n| Other costs | ${formatCents(-(i.cogsCents + i.shippingCents + i.advertisingCents + i.toolsCents + i.otherCents))} |\n| **Net profit** | **${formatCents(real.settlement.netProfitCents)}** |`,
+    `Paid orders: ${orders?.paid ?? 0} · Refunded: ${orders?.refunded ?? 0}`,
+  ];
+  if (test.hasEntries) lines.push("## Test mode", `Test revenue ${formatCents(test.inputs.revenueCents)} — not real money.`);
+  let message = "Revenue report built from your ledger";
+  if (stripeConfigured()) {
+    try {
+      const o = await stripeOverview();
+      const fmt = (b: { amount: number; currency: string }[]) => b.map((x) => formatCents(x.amount, x.currency.toUpperCase())).join(", ") || "€0.00";
+      lines.push(
+        `## Stripe (${o.livemode ? "live" : "test mode"})`,
+        `Available: ${fmt(o.available)} · Pending: ${fmt(o.pending)}`,
+        o.charges.length ? `| Payment | Amount | Status |\n| --- | --- | --- |\n${o.charges.slice(0, 10).map((c) => `| ${c.description ?? c.id} | ${formatCents(c.amount, c.currency.toUpperCase())} | ${c.refunded ? "refunded" : c.status} |`).join("\n")}` : "No payments yet.",
+      );
+      message = "Revenue report built from your ledger and Stripe";
+    } catch (e) {
+      lines.push("## Stripe", `_Couldn't read Stripe: ${e instanceof Error ? e.message : "error"}_`);
+    }
+  } else {
+    lines.push("## Stripe", "_Not connected. Set STRIPE_SECRET_KEY to include your live balance and payments._");
+  }
+  return { ok: true, result: { costCents: 0, message, artifact: { kind: "revenue_report", title: "Revenue report", content: lines.join("\n\n") } } };
+}
+
 export async function executeTool(toolId: string, ctx: ToolContext): Promise<ToolOutcome> {
   switch (toolId) {
     case "instant.market_research":
@@ -460,6 +525,10 @@ export async function executeTool(toolId: string, ctx: ToolContext): Promise<Too
       return marketSnapshot(ctx);
     case "sandbox.listing_draft":
       return listingDraft(ctx);
+    case "stripe.payment_link":
+      return stripePaymentLink(ctx);
+    case "stripe.revenue_report":
+      return revenueReport(ctx);
   }
   const impl = SANDBOX[toolId];
   if (impl) return { ok: true, result: impl(ctx) };

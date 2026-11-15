@@ -87,6 +87,8 @@ Statuses: `VERIFIED` (built and covered by automated tests) · `TESTED_SIMULATIO
 | ContentFlow | Promotion drafts (AI if configured, templates otherwise) → post to your followers after approval | VERIFIED; external networks NEEDS_CONNECTION |
 | DesignStudio | AI-written digital product → rights review → live → delivered after payment | NEEDS_CONNECTION (AI key); verified with a mocked model |
 | WebBuilder | Landing pages | NOT_BUILT |
+| EcomPro → Stripe | Creates Stripe product + price + shareable Payment Link after publishing; link sales recorded via the verified webhook and emailed to the buyer | VERIFIED with mocked Stripe (`test/stripe-agents.test.ts`); live needs `STRIPE_SECRET_KEY` + `HUSTERA_BASE_URL` |
+| RevenueDesk | Revenue report from the ledger, plus live Stripe balance and latest payments | VERIFIED (ledger); Stripe part mocked until a key is set |
 
 ## Other milestones
 

@@ -12,7 +12,7 @@ export type CapabilityStatus = "READY" | "CONNECT_REQUIRED" | "APPROVAL_REQUIRED
 
 // ---------------------------------------------------------------- tools
 
-export type ToolProvider = "sandbox" | "composio" | "hustera" | "llm" | "instant";
+export type ToolProvider = "sandbox" | "composio" | "hustera" | "llm" | "instant" | "stripe";
 
 export interface ToolDefinition {
   id: string;
@@ -44,6 +44,8 @@ export const TOOL_REGISTRY: readonly ToolDefinition[] = [
   { id: "instant.competitor_prices", version: 1, provider: "instant", name: "Competitor prices", description: "Looks up comparable products and prices (SerpApi Google Shopping) to sanity-check your price. Skipped if unavailable.", maxCostCents: 3, requiresApproval: false, status: "READY", simulated: false },
   { id: "instant.cover_image", version: 1, provider: "instant", name: "Cover image", description: "Generates an original cover image for a digital product (Black Forest Labs or Fal.ai). Shown to buyers as AI-generated. Skipped if unavailable.", maxCostCents: 10, requiresApproval: false, status: "READY", simulated: false },
   { id: "instant.market_snapshot", version: 1, provider: "instant", name: "Market snapshot", description: "Fetches current crypto and stock prices (CoinGecko, Finnhub, Alpha Vantage). Information only — no trading.", maxCostCents: 3, requiresApproval: false, status: "READY", simulated: false },
+  { id: "stripe.payment_link", version: 1, provider: "stripe", name: "Stripe payment link", description: "Creates the product, price and a shareable Payment Link in your Stripe account, so you can sell anywhere. Money goes straight to your Stripe balance.", maxCostCents: 0, requiresApproval: false, status: "READY", simulated: false },
+  { id: "stripe.revenue_report", version: 1, provider: "stripe", name: "Revenue report", description: "Reports verified sales, refunds, costs and profit from your Hustera ledger, plus your live Stripe balance and latest payments when Stripe is connected.", maxCostCents: 0, requiresApproval: false, status: "READY", simulated: false },
   { id: "sandbox.promo_drafts", version: 1, provider: "sandbox", name: "Promotion drafts", description: "Writes three post variants announcing your product, with the price and a link.", maxCostCents: 10, requiresApproval: false, status: "READY", simulated: true },
   { id: "hustera.promote_post", version: 1, provider: "hustera", name: "Post to your followers", description: "Publishes the approved promotion post to your Hustera feed, linking to the product.", maxCostCents: 0, requiresApproval: true, status: "READY", simulated: false },
   { id: "sandbox.listing_draft", version: 1, provider: "sandbox", name: "Listing draft", description: "Writes a product listing draft for your review. Nothing is published.", maxCostCents: 30, requiresApproval: true, status: "READY", simulated: true },
@@ -61,7 +63,7 @@ export function getTool(id: string): ToolDefinition | undefined {
 
 // ---------------------------------------------------------------- missions & planning
 
-export type MissionKind = "start_business" | "sell_existing" | "promote_product" | "market_watch";
+export type MissionKind = "start_business" | "sell_existing" | "promote_product" | "market_watch" | "revenue_report";
 export type MissionMode = "approve_each" | "autonomous";
 export type MissionStatus = "active" | "paused" | "blocked" | "completed" | "stopped";
 
@@ -70,6 +72,7 @@ export const MISSION_KIND_LABEL: Record<MissionKind, string> = {
   sell_existing: "Sell my existing product",
   promote_product: "Promote one of my products",
   market_watch: "Market snapshot (information only)",
+  revenue_report: "Revenue report",
 };
 
 export interface PlannedTask {
@@ -90,6 +93,9 @@ export function planMission(kind: MissionKind, opts: { externalChannel?: boolean
       { key: "promo", agentId: "contentflow", toolId: "sandbox.promo_drafts", title: "Draft promotion posts", dependsOn: [] },
       { key: "post", agentId: "contentflow", toolId: "hustera.promote_post", title: "Post to your followers", dependsOn: ["promo"] },
     ];
+  }
+  if (kind === "revenue_report") {
+    return [{ key: "report", agentId: "finance", toolId: "stripe.revenue_report", title: "Build the revenue report", dependsOn: [] }];
   }
   if (kind === "market_watch") {
     return [{ key: "snapshot", agentId: "markets", toolId: "instant.market_snapshot", title: "Fetch a market snapshot", dependsOn: [] }];
@@ -113,7 +119,8 @@ export function planMission(kind: MissionKind, opts: { externalChannel?: boolean
     { key: "checklist", agentId: "core", toolId: "sandbox.compliance_checklist", title: "Prepare launch checklist", dependsOn: ["offer"] },
     { key: "listing", agentId: "ecompro", toolId: "sandbox.listing_draft", title: "Write the product listing", dependsOn: ["offer", "seo"] },
     { key: "publish", agentId: "ecompro", toolId: "hustera.publish_to_store", title: "Publish to your Hustera store", dependsOn: publishDeps },
-    { key: "promo", agentId: "contentflow", toolId: "sandbox.promo_drafts", title: "Draft promotion posts", dependsOn: ["publish"] },
+    { key: "paylink", agentId: "ecompro", toolId: "stripe.payment_link", title: "Create a Stripe payment link", dependsOn: ["publish"] },
+    { key: "promo", agentId: "contentflow", toolId: "sandbox.promo_drafts", title: "Draft promotion posts", dependsOn: ["publish", "paylink"] },
     { key: "post", agentId: "contentflow", toolId: "hustera.promote_post", title: "Announce it to your followers", dependsOn: ["promo"] },
   );
   if (opts.externalChannel) plan.push({ key: "external", agentId: "ecompro", toolId: "composio.publish_listing", title: "Publish to your external store", dependsOn: ["publish"] });

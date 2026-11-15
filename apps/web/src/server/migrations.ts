@@ -602,4 +602,18 @@ create table instant_tools (
 );
 `,
   },
+  {
+    id: "007_stripe_agents",
+    sql: /* sql */ `
+alter table products add column stripe_product_id text;
+alter table products add column stripe_price_id text;
+alter table products add column stripe_payment_link_id text;
+alter table products add column stripe_payment_link_url text check (stripe_payment_link_url is null or stripe_payment_link_url ~ '^https://');
+create unique index products_stripe_product_idx on products (stripe_product_id) where stripe_product_id is not null;
+create index products_stripe_link_idx on products (stripe_payment_link_id);
+
+alter table missions drop constraint missions_kind_check;
+alter table missions add constraint missions_kind_check check (kind in ('start_business','sell_existing','promote_product','market_watch','revenue_report'));
+`,
+  },
 ];
