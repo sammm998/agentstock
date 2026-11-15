@@ -45,7 +45,7 @@ test("EcomPro takes a product live, announces it, and a sale shows in the missio
   await expect(page.getByRole("heading", { name: "Add a product" })).toBeVisible();
 
   await page.goto("/home");
-  await page.getByRole("listitem").filter({ hasText: "EcomPro" }).getByRole("link", { name: "Use Agent" }).click();
+  await page.getByRole("link", { name: "EcomPro", exact: true }).first().click();
   await page.getByLabel("Product name").fill("Budget meal planner");
   await page.getByLabel("Describe the product for buyers").fill("A printable 4-week budget meal planner with shopping lists.");
   await page.getByLabel("Price incl. VAT (€)").fill("7.90");

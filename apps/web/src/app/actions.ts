@@ -761,3 +761,11 @@ export async function missionRepeatAction(fd: FormData): Promise<ActionState> {
     return "Schedule updated";
   });
 }
+
+export async function setLayoutAction(fd: FormData): Promise<ActionState> {
+  const value = str(fd, "layout") === "sidebar" ? "sidebar" : "dock";
+  const { cookies } = await import("next/headers");
+  (await cookies()).set("hustera_layout", value, { path: "/", maxAge: 60 * 60 * 24 * 365, sameSite: "lax", httpOnly: true });
+  revalidatePath("/", "layout");
+  return { ok: value === "sidebar" ? "Sidebar on" : "Dock only" };
+}

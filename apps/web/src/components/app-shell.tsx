@@ -1,5 +1,9 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { cookies } from "next/headers";
+import { LayoutPanelLeft, PanelBottom } from "lucide-react";
+import { setLayoutAction } from "@/app/actions";
+import { ActionForm } from "./action-form";
 import { Activity, Bell, MessageCircle, Search } from "lucide-react";
 import { canOnPlatform } from "@hustera/domain";
 import { getViewer } from "@/server/session";
@@ -28,6 +32,7 @@ export async function AppShell({ children }: { children: ReactNode }) {
     : [{ notifications: 0, messages: 0 }, [], null];
 
   const moderator = !!viewer && canOnPlatform(viewer.role, "view_reports");
+  const sidebar = !!viewer && (await cookies()).get("hustera_layout")?.value === "sidebar";
 
   return (
     <div className="desktop min-h-dvh">
@@ -50,6 +55,17 @@ export async function AppShell({ children }: { children: ReactNode }) {
               ))}
             </ul>
           </nav>
+          {viewer && (
+            <details className="relative hidden md:block">
+              <summary className="cursor-pointer list-none rounded-md px-2.5 py-1 text-white/90 hover:bg-white/15">View</summary>
+              <div className="mac-window absolute left-0 top-8 z-50 w-56 p-1.5">
+                <ActionForm action={setLayoutAction}>
+                  <button name="layout" value="dock" className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] hover:bg-indigo/40 ${!sidebar ? "text-mint" : ""}`}><PanelBottom size={15} aria-hidden="true" /> Dock only {!sidebar && "✓"}</button>
+                  <button name="layout" value="sidebar" className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] hover:bg-indigo/40 ${sidebar ? "text-mint" : ""}`}><LayoutPanelLeft size={15} aria-hidden="true" /> Sidebar menu {sidebar && "✓"}</button>
+                </ActionForm>
+              </div>
+            </details>
+          )}
           <div className="ml-auto flex items-center gap-0.5">
             <form action="/discover" role="search" className="relative hidden sm:block">
               <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-white/70" aria-hidden="true" />
@@ -89,7 +105,7 @@ export async function AppShell({ children }: { children: ReactNode }) {
       </header>
 
       {/* Finder-style sidebar */}
-      <aside className="glass-panel fixed bottom-24 left-3 top-[52px] z-20 hidden w-60 flex-col rounded-[22px] lg:flex">
+      {sidebar && <aside className="glass-panel fixed bottom-3 left-3 top-[52px] z-20 hidden w-60 flex-col rounded-[22px] lg:flex">
         <nav aria-label="Primary" className="flex-1 overflow-y-auto px-2.5 pb-4 pt-4">
           <p className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-white/55">Favourites</p>
           <SideNav unreadMessages={counts.messages} moderator={moderator} />
@@ -119,14 +135,14 @@ export async function AppShell({ children }: { children: ReactNode }) {
             <span className="font-semibold text-mint">{sparks.balance} · {sparks.tier.name}</span>
           </Link>
         )}
-      </aside>
+      </aside>}
 
-      <div className="pt-10 lg:pl-[16.5rem]">
-        <main id="main" className="page-in mx-auto max-w-6xl px-4 pb-32 pt-6 sm:px-6">
+      <div className={`pt-10 ${sidebar ? "lg:pl-[16.5rem]" : ""}`}>
+        <main id="main" className={`page-in mx-auto px-4 pt-6 sm:px-6 ${sidebar ? "max-w-6xl pb-32 lg:pb-10" : "max-w-7xl pb-32"}`}>
           {children}
         </main>
       </div>
-      {viewer && <Dock unreadMessages={counts.messages} />}
+      {viewer && <Dock unreadMessages={counts.messages} sidebar={sidebar} />}
     </div>
   );
 }
