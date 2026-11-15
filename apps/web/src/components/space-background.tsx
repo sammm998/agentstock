@@ -2,10 +2,184 @@
 
 import { useEffect, useRef } from "react";
 
+// ---------------------------------------------------------------- noise
+
+function makeNoise(seed: number) {
+  const p = new Uint8Array(512);
+  const perm = Array.from({ length: 256 }, (_, i) => i);
+  let s = seed;
+  const rnd = () => ((s = (s * 16807) % 2147483647) / 2147483647);
+  for (let i = 255; i > 0; i--) {
+    const j = Math.floor(rnd() * (i + 1));
+    [perm[i], perm[j]] = [perm[j]!, perm[i]!];
+  }
+  for (let i = 0; i < 512; i++) p[i] = perm[i & 255]!;
+  const fade = (t: number) => t * t * t * (t * (t * 6 - 15) + 10);
+  const grad = (h: number, x: number, y: number) => ((h & 1 ? -x : x) + (h & 2 ? -y : y));
+  const noise = (x: number, y: number) => {
+    const X = Math.floor(x) & 255, Y = Math.floor(y) & 255;
+    x -= Math.floor(x); y -= Math.floor(y);
+    const u = fade(x), v = fade(y);
+    const a = p[X]! + Y, b = p[X + 1]! + Y;
+    const l1 = grad(p[a]!, x, y) + u * (grad(p[b]!, x - 1, y) - grad(p[a]!, x, y));
+    const l2 = grad(p[a + 1]!, x, y - 1) + u * (grad(p[b + 1]!, x - 1, y - 1) - grad(p[a + 1]!, x, y - 1));
+    return l1 + v * (l2 - l1);
+  };
+  return (x: number, y: number, oct = 5) => {
+    let f = 0, amp = 0.5, fr = 1;
+    for (let o = 0; o < oct; o++) { f += amp * noise(x * fr, y * fr); fr *= 2; amp *= 0.5; }
+    return f; // ≈ -0.5..0.5
+  };
+}
+
+const clamp = (v: number, a = 0, b = 1) => Math.max(a, Math.min(b, v));
+
+// ---------------------------------------------------------------- painters
+
+/** Deep-space backdrop: nebulae, a Milky Way band and thousands of stars. */
+function paintSky(w: number, h: number, small: boolean) {
+  const c = document.createElement("canvas");
+  c.width = w; c.height = h;
+  const g = c.getContext("2d")!;
+  g.fillStyle = "#020309";
+  g.fillRect(0, 0, w, h);
+
+  // nebula via fbm at quarter resolution
+  const sc = 4;
+  const nw = Math.ceil(w / sc), nh = Math.ceil(h / sc);
+  const neb = document.createElement("canvas");
+  neb.width = nw; neb.height = nh;
+  const ng = neb.getContext("2d")!;
+  const img = ng.createImageData(nw, nh);
+  const fbm = makeNoise(7), fbm2 = makeNoise(42);
+  for (let y = 0; y < nh; y++) {
+    for (let x = 0; x < nw; x++) {
+      const u = x / nw, v = y / nh;
+      // diagonal galactic band
+      const band = Math.exp(-(((v - 0.25 - u * 0.55) * 3.2) ** 2));
+      const n = fbm(u * 3.2, v * 3.2) + 0.5;
+      const n2 = fbm2(u * 6 + 10, v * 6) + 0.5;
+      const dust = clamp((fbm(u * 9 + 3, v * 9) + 0.5 - 0.45) * 3); // dark lanes
+      const glow = clamp(band * (n * 1.4 - 0.25)) * (1 - dust * 0.75);
+      const cloud = clamp((n2 - 0.52) * 2.6) * (0.5 + band);
+      const i = (y * nw + x) * 4;
+      // violet core, teal edges, warm dust
+      img.data[i] = clamp(glow * 120 + cloud * 70 + glow * dust * 40, 0, 255);
+      img.data[i + 1] = clamp(glow * 80 + cloud * 110, 0, 255);
+      img.data[i + 2] = clamp(glow * 210 + cloud * 150, 0, 255);
+      img.data[i + 3] = 255;
+    }
+  }
+  ng.putImageData(img, 0, 0);
+  g.globalCompositeOperation = "lighter";
+  g.globalAlpha = 0.55;
+  g.imageSmoothingQuality = "high";
+  g.filter = "blur(14px)";
+  g.drawImage(neb, 0, 0, w, h);
+  g.filter = "none";
+  g.globalAlpha = 1;
+
+  // stars: dense along the band, real stellar colours
+  const colours = ["#9bb0ff", "#aabfff", "#cad7ff", "#f8f7ff", "#fff4ea", "#ffd2a1", "#ffcc6f"];
+  const count = small ? 1400 : 3600;
+  for (let k = 0; k < count; k++) {
+    const u = Math.random(), inBand = Math.random() < 0.55;
+    const v = inBand ? 0.25 + u * 0.55 + (Math.random() + Math.random() + Math.random() - 1.5) * 0.12 : Math.random();
+    const x = u * w, y = v * h;
+    const m = Math.random() ** 6;
+    const r = 0.25 + m * 1.4;
+    g.globalAlpha = 0.25 + Math.random() * 0.6;
+    g.fillStyle = colours[Math.floor(Math.random() * colours.length)]!;
+    g.beginPath();
+    g.arc(x, y, r, 0, Math.PI * 2);
+    g.fill();
+  }
+  g.globalAlpha = 1;
+  g.globalCompositeOperation = "source-over";
+  // vignette
+  const vg = g.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.3, w / 2, h / 2, Math.max(w, h) * 0.75);
+  vg.addColorStop(0, "rgba(0,0,0,0)");
+  vg.addColorStop(1, "rgba(0,0,0,0.6)");
+  g.fillStyle = vg;
+  g.fillRect(0, 0, w, h);
+  return c;
+}
+
+/** Gas giant rendered per pixel: turbulent bands, limb darkening and a lit crescent. */
+function paintGiant(r: number, rot: number) {
+  const size = Math.ceil(r * 2);
+  const c = document.createElement("canvas");
+  c.width = size; c.height = size;
+  const g = c.getContext("2d")!;
+  const img = g.createImageData(size, size);
+  const fbm = makeNoise(99);
+  const L = [-0.62, -0.5, 0.6]; // light from upper left, slightly in front
+  const ll = Math.hypot(L[0]!, L[1]!, L[2]!);
+  for (let py = 0; py < size; py++) {
+    for (let px = 0; px < size; px++) {
+      const x = (px - r) / r, y = (py - r) / r;
+      const d = x * x + y * y;
+      if (d > 1) continue;
+      const z = Math.sqrt(1 - d);
+      const lat = Math.asin(y);
+      const lon = Math.atan2(x, z) + rot;
+      const turb = fbm(lon * 1.6, lat * 7, 5);
+      const b = Math.sin(lat * 11 + turb * 5);
+      const b2 = Math.sin(lat * 27 + turb * 9);
+      const t = 0.5 + 0.5 * b;
+      // palette: deep indigo → violet → pale lavender, with teal storms
+      let R = 70 + t * 80 + b2 * 8, G = 55 + t * 60 + b2 * 7, B = 140 + t * 85 + b2 * 7;
+      const storm = clamp((fbm(lon * 3 + 5, lat * 6) - 0.3) * 3) * 0.35;
+      R = R * (1 - storm) + 110 * storm; G = G * (1 - storm) + 190 * storm; B = B * (1 - storm) + 200 * storm;
+      const lambert = clamp((x * L[0]! + y * L[1]! + z * L[2]!) / ll);
+      const light = 0.015 + lambert ** 1.5 * 1.15;
+      const limb = 0.55 + 0.45 * z;
+      const i = (py * size + px) * 4;
+      img.data[i] = clamp(R * light * limb, 0, 255);
+      img.data[i + 1] = clamp(G * light * limb, 0, 255);
+      img.data[i + 2] = clamp(B * light * limb, 0, 255);
+      img.data[i + 3] = clamp((1 - d) * 40, 0, 1) * 255;
+    }
+  }
+  g.putImageData(img, 0, 0);
+  return c;
+}
+
+function paintMoon(r: number) {
+  const size = Math.ceil(r * 2);
+  const c = document.createElement("canvas");
+  c.width = size; c.height = size;
+  const g = c.getContext("2d")!;
+  const img = g.createImageData(size, size);
+  const fbm = makeNoise(5);
+  for (let py = 0; py < size; py++) {
+    for (let px = 0; px < size; px++) {
+      const x = (px - r) / r, y = (py - r) / r;
+      const d = x * x + y * y;
+      if (d > 1) continue;
+      const z = Math.sqrt(1 - d);
+      const n = fbm(x * 3 + 2, y * 3, 6);
+      const crater = clamp(1 - Math.abs(fbm(x * 6, y * 6, 3)) * 9) * 0.25;
+      const base = 120 + n * 160 - crater * 120;
+      const lambert = clamp(-0.6 * x - 0.45 * y + 0.65 * z);
+      const v = base * (0.05 + lambert);
+      const i = (py * size + px) * 4;
+      img.data[i] = clamp(v * 0.95, 0, 255);
+      img.data[i + 1] = clamp(v * 0.97, 0, 255);
+      img.data[i + 2] = clamp(v, 0, 255);
+      img.data[i + 3] = clamp((1 - d) * 40, 0, 1) * 255;
+    }
+  }
+  g.putImageData(img, 0, 0);
+  return c;
+}
+
+// ---------------------------------------------------------------- component
+
 /**
- * Animated deep-space backdrop: parallax stars, drifting nebulae, a ringed
- * planet with a moon, orbit lines carrying LED pulses, a crypto-style node
- * network, and the Hustera mark floating as a hologram. Original artwork.
+ * Photo-real deep-space backdrop: nebulae, Milky Way, twinkling coloured stars,
+ * a lit gas giant with rings and a cratered moon, drifting slowly. The Hustera
+ * mark floats faintly like a distant station beacon. Original artwork.
  */
 export function SpaceBackground() {
   const ref = useRef<HTMLCanvasElement>(null);
@@ -18,184 +192,44 @@ export function SpaceBackground() {
     const logo = new Image();
     logo.src = "/brand/hustera-mark-clear.svg";
     let w = 0, h = 0, small = false;
-
-    type Star = { x: number; y: number; r: number; tw: number; layer: number };
-    type Node = { x: number; y: number; vx: number; vy: number };
-    let stars: Star[] = [];
-    let nodes: Node[] = [];
-    const packets: { a: number; b: number; t: number; speed: number }[] = [];
+    let sky: HTMLCanvasElement | null = null;
+    let giant: HTMLCanvasElement | null = null;
+    let moon: HTMLCanvasElement | null = null;
+    let pr = 0, rot = 0, lastPaint = 0;
+    type Star = { x: number; y: number; r: number; tw: number; c: string };
+    let bright: Star[] = [];
     let shooting: { x: number; y: number; vx: number; vy: number; life: number } | null = null;
-    const backdrop = document.createElement("canvas");
-
-    const paintBackdrop = () => {
-      backdrop.width = canvas.width;
-      backdrop.height = canvas.height;
-      const b = backdrop.getContext("2d")!;
-      b.setTransform(dpr, 0, 0, dpr, 0, 0);
-      const g = b.createLinearGradient(0, 0, 0, h);
-      g.addColorStop(0, "#05061a");
-      g.addColorStop(0.55, "#070a1e");
-      g.addColorStop(1, "#03040c");
-      b.fillStyle = g;
-      b.fillRect(0, 0, w, h);
-      const neb = (x: number, y: number, r: number, c: string) => {
-        const rg = b.createRadialGradient(x, y, 0, x, y, r);
-        rg.addColorStop(0, c);
-        rg.addColorStop(1, "transparent");
-        b.fillStyle = rg;
-        b.fillRect(0, 0, w, h);
-      };
-      neb(w * 0.12, h * 0.08, Math.max(w, h) * 0.55, "rgba(101,88,245,0.22)");
-      neb(w * 0.95, h * 0.95, Math.max(w, h) * 0.5, "rgba(34,211,166,0.12)");
-      neb(w * 0.55, h * 0.45, Math.max(w, h) * 0.35, "rgba(143,124,255,0.08)");
-      // far stars, static
-      for (let i = 0; i < (small ? 120 : 260); i++) {
-        b.fillStyle = `rgba(255,255,255,${0.15 + Math.random() * 0.35})`;
-        b.fillRect(Math.random() * w, Math.random() * h, 1, 1);
-      }
-    };
 
     const resize = () => {
-      w = window.innerWidth;
-      h = window.innerHeight;
-      small = w < 768;
-      canvas.width = Math.round(w * dpr);
-      canvas.height = Math.round(h * dpr);
-      canvas.style.width = `${w}px`;
-      canvas.style.height = `${h}px`;
+      w = window.innerWidth; h = window.innerHeight; small = w < 768;
+      canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
+      canvas.style.width = `${w}px`; canvas.style.height = `${h}px`;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      stars = Array.from({ length: small ? 70 : 150 }, () => ({ x: Math.random() * w, y: Math.random() * h, r: Math.random() * 1.3 + 0.3, tw: Math.random() * Math.PI * 2, layer: 1 + Math.floor(Math.random() * 3) }));
-      nodes = Array.from({ length: small ? 14 : 26 }, () => ({ x: Math.random() * w, y: Math.random() * h, vx: (Math.random() - 0.5) * 6, vy: (Math.random() - 0.5) * 6 }));
-      paintBackdrop();
+      sky = paintSky(w, h, small);
+      pr = Math.min(w, h) * (small ? 0.26 : 0.22);
+      giant = paintGiant(pr, rot);
+      moon = paintMoon(pr * 0.12);
+      const cols = ["#cad7ff", "#ffffff", "#fff4ea", "#ffd2a1", "#9bb0ff"];
+      bright = Array.from({ length: small ? 14 : 30 }, () => ({ x: Math.random() * w, y: Math.random() * h, r: 0.8 + Math.random() * 1.4, tw: Math.random() * 6.28, c: cols[Math.floor(Math.random() * cols.length)]! }));
     };
 
-    const planet = (cx: number, cy: number, r: number, t: number) => {
-      // back half of the ring
-      const ring = (front: boolean) => {
-        ctx.save();
-        ctx.translate(cx, cy);
-        ctx.rotate(-0.38);
-        ctx.beginPath();
-        ctx.ellipse(0, 0, r * 2.05, r * 0.5, 0, front ? 0 : Math.PI, front ? Math.PI : Math.PI * 2);
-        const rg = ctx.createLinearGradient(-r * 2, 0, r * 2, 0);
-        rg.addColorStop(0, "rgba(124,245,218,0.0)");
-        rg.addColorStop(0.3, "rgba(124,245,218,0.55)");
-        rg.addColorStop(0.7, "rgba(143,124,255,0.6)");
-        rg.addColorStop(1, "rgba(143,124,255,0.0)");
-        ctx.strokeStyle = rg;
-        ctx.lineWidth = r * 0.09;
-        ctx.stroke();
-        ctx.lineWidth = 1;
-        ctx.strokeStyle = "rgba(255,255,255,0.25)";
-        ctx.beginPath();
-        ctx.ellipse(0, 0, r * 2.3, r * 0.58, 0, front ? 0 : Math.PI, front ? Math.PI : Math.PI * 2);
-        ctx.stroke();
-        ctx.restore();
-      };
-      ring(false);
-      // atmosphere glow
-      const glow = ctx.createRadialGradient(cx, cy, r * 0.9, cx, cy, r * 1.45);
-      glow.addColorStop(0, "rgba(101,88,245,0.35)");
-      glow.addColorStop(1, "transparent");
-      ctx.fillStyle = glow;
-      ctx.beginPath();
-      ctx.arc(cx, cy, r * 1.45, 0, Math.PI * 2);
-      ctx.fill();
-      // body
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(cx, cy, r, 0, Math.PI * 2);
-      ctx.clip();
-      const body = ctx.createRadialGradient(cx - r * 0.45, cy - r * 0.5, r * 0.1, cx, cy, r * 1.05);
-      body.addColorStop(0, "#9a8cff");
-      body.addColorStop(0.45, "#4b37c9");
-      body.addColorStop(1, "#120a3a");
-      ctx.fillStyle = body;
-      ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
-      // drifting cloud bands
-      for (let i = 0; i < 7; i++) {
-        const y = cy - r + ((i + 0.5) / 7) * r * 2;
-        const off = ((t * (6 + i * 1.5)) % (r * 4)) - r * 2;
-        ctx.fillStyle = i % 2 ? "rgba(124,245,218,0.07)" : "rgba(255,255,255,0.05)";
-        ctx.beginPath();
-        ctx.ellipse(cx + off, y, r * 1.4, r * 0.06 + (i % 3) * 2, 0, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      // terminator shadow
-      const sh = ctx.createLinearGradient(cx - r, cy - r, cx + r, cy + r);
-      sh.addColorStop(0.45, "rgba(0,0,0,0)");
-      sh.addColorStop(1, "rgba(2,2,12,0.75)");
-      ctx.fillStyle = sh;
-      ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
-      ctx.restore();
-      // rim light
-      ctx.strokeStyle = "rgba(124,245,218,0.35)";
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.arc(cx, cy, r, Math.PI * 0.95, Math.PI * 1.6);
-      ctx.stroke();
-      ring(true);
-      // moon
-      const a = t * 0.12;
-      const mx = cx + Math.cos(a) * r * 2.6;
-      const my = cy + Math.sin(a) * r * 0.75 - r * 0.2;
-      const behind = Math.sin(a) < 0;
-      if (!behind || true) {
-        const mg = ctx.createRadialGradient(mx - 4, my - 4, 1, mx, my, r * 0.14);
-        mg.addColorStop(0, "#e9fffa");
-        mg.addColorStop(1, "#1d6f62");
-        ctx.globalAlpha = behind ? 0.5 : 1;
-        ctx.fillStyle = mg;
-        ctx.beginPath();
-        ctx.arc(mx, my, r * 0.12, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.globalAlpha = 1;
-      }
-    };
-
-    const smallPlanet = (cx: number, cy: number, r: number) => {
-      const g = ctx.createRadialGradient(cx - r * 0.4, cy - r * 0.4, 1, cx, cy, r);
-      g.addColorStop(0, "#b6fff0");
-      g.addColorStop(0.5, "#22d3a6");
-      g.addColorStop(1, "#063a32");
-      const glow = ctx.createRadialGradient(cx, cy, r, cx, cy, r * 2.2);
-      glow.addColorStop(0, "rgba(34,211,166,0.25)");
-      glow.addColorStop(1, "transparent");
-      ctx.fillStyle = glow;
-      ctx.beginPath();
-      ctx.arc(cx, cy, r * 2.2, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = g;
-      ctx.beginPath();
-      ctx.arc(cx, cy, r, 0, Math.PI * 2);
-      ctx.fill();
-    };
-
-    const orbit = (cx: number, cy: number, rx: number, ry: number, rot: number, t: number, speed: number) => {
+    const drawRing = (cx: number, cy: number, front: boolean) => {
       ctx.save();
       ctx.translate(cx, cy);
-      ctx.rotate(rot);
-      ctx.strokeStyle = "rgba(255,255,255,0.06)";
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
-      ctx.stroke();
-      // LED pulse along the orbit
-      const head = t * speed;
-      for (let s = 0; s < 22; s++) {
-        const a1 = head - s * 0.018;
-        const a2 = a1 - 0.018;
-        const alpha = (1 - s / 22) ** 2;
-        ctx.strokeStyle = `rgba(255,255,255,${(0.9 * alpha).toFixed(3)})`;
-        ctx.shadowColor = "rgba(180,200,255,0.9)";
-        ctx.shadowBlur = 10 * alpha;
-        ctx.lineWidth = 1.6;
+      ctx.rotate(-0.42);
+      ctx.scale(1, 0.24);
+      const bands: [number, number, string][] = [
+        [1.32, 1.5, "rgba(190,175,255,0.30)"], [1.52, 1.78, "rgba(214,204,255,0.45)"],
+        [1.84, 1.96, "rgba(160,150,230,0.25)"], [1.99, 2.25, "rgba(200,190,250,0.38)"], [2.3, 2.36, "rgba(170,240,225,0.25)"],
+      ];
+      for (const [a, b, col] of bands) {
         ctx.beginPath();
-        ctx.moveTo(Math.cos(a1) * rx, Math.sin(a1) * ry);
-        ctx.lineTo(Math.cos(a2) * rx, Math.sin(a2) * ry);
-        ctx.stroke();
+        ctx.arc(0, 0, pr * b, front ? 0 : Math.PI, front ? Math.PI : Math.PI * 2, false);
+        ctx.arc(0, 0, pr * a, front ? Math.PI : Math.PI * 2, front ? 0 : Math.PI, true);
+        ctx.closePath();
+        ctx.fillStyle = col;
+        ctx.fill();
       }
-      ctx.shadowBlur = 0;
       ctx.restore();
     };
 
@@ -205,114 +239,90 @@ export function SpaceBackground() {
       const t = now / 1000;
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
-      ctx.drawImage(backdrop, 0, 0, w, h);
+      if (sky) ctx.drawImage(sky, 0, 0, w, h);
 
-      // twinkling parallax stars
-      for (const s of stars) {
-        if (!reduce) s.x -= s.layer * 2.2 * dt;
-        if (s.x < -2) s.x = w + 2;
-        const a = 0.35 + 0.65 * Math.abs(Math.sin(t * (0.6 + s.layer * 0.3) + s.tw));
-        ctx.fillStyle = `rgba(255,255,255,${(a * (0.4 + s.layer * 0.2)).toFixed(3)})`;
-        ctx.beginPath();
-        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
-        ctx.fill();
-      }
+      // slow camera drift for depth
+      const driftX = Math.sin(t * 0.03) * 12, driftY = Math.cos(t * 0.025) * 8;
 
-      // crypto network
-      for (const n of nodes) {
-        if (!reduce) { n.x += n.vx * dt; n.y += n.vy * dt; }
-        if (n.x < 0 || n.x > w) n.vx *= -1;
-        if (n.y < 0 || n.y > h) n.vy *= -1;
-      }
-      const maxD = small ? 150 : 210;
-      const edges: [number, number][] = [];
-      for (let i = 0; i < nodes.length; i++) {
-        for (let j = i + 1; j < nodes.length; j++) {
-          const d = Math.hypot(nodes[i]!.x - nodes[j]!.x, nodes[i]!.y - nodes[j]!.y);
-          if (d < maxD) {
-            edges.push([i, j]);
-            ctx.strokeStyle = `rgba(143,124,255,${(0.16 * (1 - d / maxD)).toFixed(3)})`;
-            ctx.lineWidth = 1;
-            ctx.beginPath();
-            ctx.moveTo(nodes[i]!.x, nodes[i]!.y);
-            ctx.lineTo(nodes[j]!.x, nodes[j]!.y);
-            ctx.stroke();
-          }
+      // bright twinkling stars with diffraction spikes
+      for (const s of bright) {
+        const a = 0.55 + 0.45 * Math.sin(t * 1.3 + s.tw);
+        const x = s.x + driftX * 0.3, y = s.y + driftY * 0.3;
+        const glow = ctx.createRadialGradient(x, y, 0, x, y, s.r * 6);
+        glow.addColorStop(0, s.c);
+        glow.addColorStop(0.15, `${s.c}aa`);
+        glow.addColorStop(1, "transparent");
+        ctx.globalAlpha = a;
+        ctx.fillStyle = glow;
+        ctx.fillRect(x - s.r * 6, y - s.r * 6, s.r * 12, s.r * 12);
+        if (s.r > 1.6) {
+          ctx.strokeStyle = s.c;
+          ctx.globalAlpha = a * 0.35;
+          ctx.lineWidth = 0.6;
+          ctx.beginPath();
+          ctx.moveTo(x - s.r * 9, y); ctx.lineTo(x + s.r * 9, y);
+          ctx.moveTo(x, y - s.r * 9); ctx.lineTo(x, y + s.r * 9);
+          ctx.stroke();
         }
       }
-      for (const n of nodes) {
-        ctx.fillStyle = "rgba(124,245,218,0.55)";
-        ctx.beginPath();
-        ctx.arc(n.x, n.y, 1.6, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      if (!reduce && edges.length && packets.length < 6 && Math.random() < 0.05) {
-        const [a, b] = edges[Math.floor(Math.random() * edges.length)]!;
-        packets.push({ a, b, t: 0, speed: 0.5 + Math.random() * 0.6 });
-      }
-      for (let i = packets.length - 1; i >= 0; i--) {
-        const p = packets[i]!;
-        p.t += p.speed * dt;
-        const A = nodes[p.a]!, B = nodes[p.b]!;
-        if (p.t >= 1 || Math.hypot(A.x - B.x, A.y - B.y) > maxD) { packets.splice(i, 1); continue; }
-        const x = A.x + (B.x - A.x) * p.t, y = A.y + (B.y - A.y) * p.t;
-        ctx.fillStyle = "#ffffff";
-        ctx.shadowColor = "#7cf5da";
-        ctx.shadowBlur = 12;
-        ctx.beginPath();
-        ctx.arc(x, y, 2, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.shadowBlur = 0;
-      }
+      ctx.globalAlpha = 1;
 
-      // orbits around the hologram
-      const lx = small ? w * 0.5 : w * 0.6;
-      const ly = small ? h * 0.38 : h * 0.42;
-      const R = Math.min(w, h) * (small ? 0.42 : 0.36);
-      orbit(lx, ly, R, R * 0.32, -0.25, t, 0.35);
-      orbit(lx, ly, R * 1.35, R * 0.45, -0.25, t + 3, -0.22);
-      orbit(lx, ly, R * 0.7, R * 0.22, -0.25, t + 7, 0.5);
-
-      // Hustera hologram
+      // Hustera beacon, far away
       if (logo.complete && logo.naturalWidth) {
-        const size = Math.min(w, h) * (small ? 0.3 : 0.24);
-        const float = Math.sin(t * 0.6) * 8;
-        const spin = Math.cos(t * 0.35);
+        const lx = (small ? w * 0.5 : w * 0.56) + driftX * 0.5, ly = (small ? h * 0.3 : h * 0.36) + driftY * 0.5;
+        const size = Math.min(w, h) * (small ? 0.2 : 0.15);
+        const halo = ctx.createRadialGradient(lx, ly, 0, lx, ly, size * 1.4);
+        halo.addColorStop(0, "rgba(143,124,255,0.14)");
+        halo.addColorStop(1, "transparent");
+        ctx.fillStyle = halo;
+        ctx.fillRect(lx - size * 1.4, ly - size * 1.4, size * 2.8, size * 2.8);
         ctx.save();
-        ctx.translate(lx, ly + float);
-        ctx.scale(0.35 + 0.65 * Math.abs(spin), 1);
-        ctx.globalAlpha = 0.16;
-        ctx.shadowColor = "#8f7cff";
-        ctx.shadowBlur = 40;
+        ctx.translate(lx, ly + Math.sin(t * 0.5) * 6);
+        ctx.scale(0.4 + 0.6 * Math.abs(Math.cos(t * 0.25)), 1);
+        ctx.globalAlpha = 0.13;
         ctx.drawImage(logo, -size / 2, -size / 2, size, size);
         ctx.restore();
-        // scan lines over the hologram
-        ctx.save();
-        ctx.globalAlpha = 0.05;
-        ctx.fillStyle = "#7cf5da";
-        for (let y = -size / 2; y < size / 2; y += 6) ctx.fillRect(lx - size / 2, ly + float + y + ((t * 12) % 6), size, 1);
-        ctx.restore();
       }
 
-      // planets
-      const pr = Math.min(w, h) * (small ? 0.2 : 0.17);
-      planet(small ? w * 0.85 : w * 0.88, small ? h * 0.86 : h * 0.82, pr, t);
-      smallPlanet(small ? w * 0.12 : w * 0.22, small ? h * 0.14 : h * 0.18, pr * 0.22);
+      // gas giant: re-shade slowly as it rotates
+      if (!reduce && now - lastPaint > 1500) { rot += 0.012; giant = paintGiant(pr, rot); lastPaint = now; }
+      const gx = (small ? w * 0.9 : w * 0.86) + driftX, gy = (small ? h * 0.9 : h * 0.8) + driftY;
+      if (giant) {
+        drawRing(gx, gy, false);
+        const atmo = ctx.createRadialGradient(gx, gy, pr * 0.96, gx, gy, pr * 1.18);
+        atmo.addColorStop(0, "rgba(150,140,255,0.35)");
+        atmo.addColorStop(1, "transparent");
+        ctx.fillStyle = atmo;
+        ctx.beginPath(); ctx.arc(gx, gy, pr * 1.18, 0, Math.PI * 2); ctx.fill();
+        ctx.drawImage(giant, gx - pr, gy - pr);
+        // ring shadow on the planet
+        ctx.save();
+        ctx.beginPath(); ctx.arc(gx, gy, pr, 0, Math.PI * 2); ctx.clip();
+        ctx.translate(gx, gy + pr * 0.18); ctx.rotate(-0.42); ctx.scale(1, 0.12);
+        ctx.fillStyle = "rgba(0,0,0,0.35)";
+        ctx.fillRect(-pr * 2, -pr * 0.6, pr * 4, pr * 0.5);
+        ctx.restore();
+        drawRing(gx, gy, true);
+      }
 
-      // shooting star
-      if (!reduce && !shooting && Math.random() < 0.004) shooting = { x: Math.random() * w * 0.7, y: Math.random() * h * 0.3, vx: 520, vy: 220, life: 1 };
+      // moon on a slow orbit, passing behind the planet
+      if (moon) {
+        const a = t * 0.05;
+        const mx = gx + Math.cos(a) * pr * 2.9, my = gy + Math.sin(a) * pr * 0.7 - pr * 0.3;
+        const behind = Math.sin(a) < 0 && Math.hypot(mx - gx, my - gy) < pr * 1.1;
+        if (!behind) ctx.drawImage(moon, mx - pr * 0.12, my - pr * 0.12);
+      }
+
+      // occasional meteor
+      if (!reduce && !shooting && Math.random() < 0.003) shooting = { x: Math.random() * w * 0.7, y: Math.random() * h * 0.35, vx: 640, vy: 260, life: 1 };
       if (shooting) {
         const s = shooting;
-        s.x += s.vx * dt; s.y += s.vy * dt; s.life -= dt * 1.3;
-        const g = ctx.createLinearGradient(s.x, s.y, s.x - s.vx * 0.18, s.y - s.vy * 0.18);
-        g.addColorStop(0, `rgba(255,255,255,${Math.max(0, s.life)})`);
-        g.addColorStop(1, "rgba(255,255,255,0)");
-        ctx.strokeStyle = g;
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.moveTo(s.x, s.y);
-        ctx.lineTo(s.x - s.vx * 0.18, s.y - s.vy * 0.18);
-        ctx.stroke();
+        s.x += s.vx * dt; s.y += s.vy * dt; s.life -= dt * 1.4;
+        const tail = ctx.createLinearGradient(s.x, s.y, s.x - s.vx * 0.15, s.y - s.vy * 0.15);
+        tail.addColorStop(0, `rgba(255,255,255,${clamp(s.life)})`);
+        tail.addColorStop(1, "rgba(255,255,255,0)");
+        ctx.strokeStyle = tail; ctx.lineWidth = 1.2;
+        ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.lineTo(s.x - s.vx * 0.15, s.y - s.vy * 0.15); ctx.stroke();
         if (s.life <= 0) shooting = null;
       }
 
@@ -320,7 +330,9 @@ export function SpaceBackground() {
     };
 
     resize();
-    window.addEventListener("resize", resize);
+    let resizeTimer = 0;
+    const onResize = () => { clearTimeout(resizeTimer); resizeTimer = window.setTimeout(resize, 200); };
+    window.addEventListener("resize", onResize);
     logo.onload = () => { if (reduce) draw(performance.now()); };
     raf = requestAnimationFrame(draw);
     const onVis = () => {
@@ -330,7 +342,7 @@ export function SpaceBackground() {
     document.addEventListener("visibilitychange", onVis);
     return () => {
       cancelAnimationFrame(raf);
-      window.removeEventListener("resize", resize);
+      window.removeEventListener("resize", onResize);
       document.removeEventListener("visibilitychange", onVis);
     };
   }, []);
