@@ -106,7 +106,7 @@ function paintSky(w: number, h: number, small: boolean) {
 }
 
 /** Gas giant rendered per pixel: turbulent bands, limb darkening and a lit crescent. */
-function paintGiant(r: number, rot: number) {
+export function paintGiant(r: number, rot: number) {
   const size = Math.ceil(r * 2);
   const c = document.createElement("canvas");
   c.width = size; c.height = size;
