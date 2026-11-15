@@ -1,8 +1,11 @@
 import "server-only";
+import { findText } from "@hustera/domain";
+import type { Queryable } from "./db";
+import { instantConfigured, runInstant } from "./instant";
 
 export interface LlmResult {
   text: string;
-  provider: "anthropic" | "openai";
+  provider: "anthropic" | "openai" | "composio";
   model: string;
   inputTokens: number;
   outputTokens: number;
@@ -11,14 +14,18 @@ export interface LlmResult {
 }
 
 export interface LlmConfig {
-  provider: "anthropic" | "openai" | null;
+  provider: "anthropic" | "openai" | "composio" | null;
   model: string | null;
 }
 
-/** Anthropic is preferred when both keys are present. */
+/**
+ * Direct keys win (Anthropic first); otherwise Composio Instant text tools
+ * (Gemini, OpenAI, OpenRouter, DeepSeek) billed to the Composio wallet.
+ */
 export function llmConfig(): LlmConfig {
   if (process.env.ANTHROPIC_API_KEY) return { provider: "anthropic", model: process.env.HUSTERA_LLM_MODEL ?? "claude-sonnet-5-5" };
   if (process.env.OPENAI_API_KEY) return { provider: "openai", model: process.env.HUSTERA_LLM_MODEL ?? "gpt-5-mini" };
+  if (instantConfigured()) return { provider: "composio", model: "Composio Instant (Gemini → OpenAI → OpenRouter → DeepSeek)" };
   return { provider: null, model: null };
 }
 
@@ -33,7 +40,7 @@ function estimateCents(inputTokens: number, outputTokens: number): number {
  * Generates text with the configured model. Used only to draft content for the
  * user to review — never to decide approvals, budgets or payments.
  */
-export async function generateText(system: string, prompt: string, opts: { maxTokens?: number; fetchImpl?: typeof fetch } = {}): Promise<LlmResult> {
+export async function generateText(system: string, prompt: string, opts: { maxTokens?: number; fetchImpl?: typeof fetch; db?: Queryable } = {}): Promise<LlmResult> {
   const cfg = llmConfig();
   const f = opts.fetchImpl ?? fetch;
   const maxTokens = opts.maxTokens ?? 2000;
@@ -64,6 +71,12 @@ export async function generateText(system: string, prompt: string, opts: { maxTo
     const inputTokens = body.usage?.prompt_tokens ?? 0;
     const outputTokens = body.usage?.completion_tokens ?? 0;
     return { text, provider: "openai", model: cfg.model!, inputTokens, outputTokens, costCents: estimateCents(inputTokens, outputTokens) };
+  }
+  if (cfg.provider === "composio") {
+    const r = await runInstant("llm", { prompt: `${system}\n\n${prompt}` }, { fetchImpl: opts.fetchImpl, db: opts.db });
+    const text = (findText(r.data) ?? "").trim();
+    if (!text) throw new Error(`${r.tool} returned no text`);
+    return { text, provider: "composio", model: `${r.toolkit}/${r.tool}`, inputTokens: 0, outputTokens: 0, costCents: r.maxCostCents };
   }
   throw new Error("No AI model is configured");
 }

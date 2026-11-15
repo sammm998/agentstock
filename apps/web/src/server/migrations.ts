@@ -582,4 +582,24 @@ create table event_rsvps (
 );
 `,
   },
+  {
+    id: "006_composio_instant",
+    sql: /* sql */ `
+alter table missions drop constraint missions_kind_check;
+alter table missions add constraint missions_kind_check check (kind in ('start_business','sell_existing','promote_product','market_watch'));
+alter table products add column image_url text check (image_url is null or image_url ~ '^https://');
+
+-- What Hustera has learned about each Composio Instant tool: discovered slugs and real call outcomes.
+create table instant_tools (
+  toolkit text not null,
+  tool_slug text not null,
+  discovered_at timestamptz,
+  last_success_at timestamptz,
+  last_error text,
+  last_error_at timestamptz,
+  calls int not null default 0,
+  primary key (toolkit, tool_slug)
+);
+`,
+  },
 ];

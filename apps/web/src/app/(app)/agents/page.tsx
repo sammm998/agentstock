@@ -26,7 +26,7 @@ export default async function AgentsPage() {
       <PageHeader
         title="AI Agents"
         description="Hustera Core plans missions and dispatches tasks to specialist agents — always within your budget limits and approvals, with every result recorded."
-        actions={viewer ? <Link href="/agents/ecompro" className="btn-primary"><Bot size={16} aria-hidden="true" /> Start with EcomPro</Link> : undefined}
+        actions={<><Link href="/agents/instant" className="btn-secondary">Composio Instant apps</Link>{viewer && <Link href="/agents/ecompro" className="btn-primary"><Bot size={16} aria-hidden="true" /> Start with EcomPro</Link>}</>}
       />
       <div className="card mb-6 border-warning/25 p-5 text-sm text-muted">
         <strong className="text-cloud">How agents work:</strong> every agent runs inside a mission with your budget limits and approvals. Anything that publishes, posts or spends needs your OK first, and you can pause or stop at any time. Agents never promise income — they do the work, you see the real results in your wallet.

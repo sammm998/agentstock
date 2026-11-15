@@ -17,7 +17,7 @@ test("mission drafts a listing, waits for a store, then publishes a draft produc
   await page.getByRole("button", { name: "Run agents" }).click();
   await expect(page.getByText("Research plan — Study planners")).toBeVisible();
   const tasks = page.getByRole("region", { name: "Tasks" });
-  const listing = tasks.locator("li", { hasText: "Draft a product listing" });
+  const listing = tasks.locator("li", { hasText: "Write the product listing" });
   await listing.getByRole("button", { name: "Approve" }).click();
   await expect(page.getByText("Listing draft — Study planners")).toBeVisible();
 
@@ -60,7 +60,7 @@ test("EcomPro takes a product live, announces it, and a sale shows in the missio
 
   await page.getByRole("button", { name: "Run agents" }).click();
   const tasks = page.getByRole("region", { name: "Tasks" });
-  for (const name of ["Draft a product listing", "Publish to your Hustera store", "Announce it to your followers"]) {
+  for (const name of ["Write the product listing", "Publish to your Hustera store", "Announce it to your followers"]) {
     const row = tasks.locator("li", { hasText: name });
     await row.getByRole("button", { name: "Approve" }).click();
     await expect(row.getByText("Done")).toBeVisible();

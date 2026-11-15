@@ -133,7 +133,7 @@ export function extractMentions(text: string): string[] {
 
 export const missionSchema = z
   .object({
-    kind: z.enum(["start_business", "sell_existing", "promote_product"]),
+    kind: z.enum(["start_business", "sell_existing", "promote_product", "market_watch"]),
     title: z.string().trim().min(3, "Give the mission a name").max(80),
     brief: z.string().trim().min(10, "Describe your idea or product in a sentence or two").max(2000),
     region: z.string().trim().min(2).max(60),

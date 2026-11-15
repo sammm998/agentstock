@@ -25,7 +25,14 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
   return (
     <div className="mx-auto max-w-3xl space-y-4">
       <Link href={`/store/${slug}`} className="btn-ghost btn-sm -ml-2"><ArrowLeft size={15} aria-hidden="true" /> {product.store_name}</Link>
-      <article className="card p-6 sm:p-8">
+      <article className="card overflow-hidden p-6 sm:p-8">
+        {product.image_url && (
+          <figure className="-mx-6 -mt-6 mb-6 sm:-mx-8 sm:-mt-8">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={product.image_url} alt={`Cover image for ${product.title}`} className="aspect-[16/9] w-full object-cover" referrerPolicy="no-referrer" />
+            <figcaption className="px-6 pt-2 text-xs text-muted sm:px-8">AI-generated image</figcaption>
+          </figure>
+        )}
         <span className="chip capitalize">{product.kind}</span>
         <h1 className="mt-3 text-3xl font-bold">{product.title}</h1>
         <p className="mt-2 text-2xl font-bold text-mint">{formatCents(product.price_cents, product.currency)} <span className="text-sm font-normal text-muted">incl. VAT</span></p>

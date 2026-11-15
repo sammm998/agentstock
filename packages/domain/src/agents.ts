@@ -12,7 +12,7 @@ export type CapabilityStatus = "READY" | "CONNECT_REQUIRED" | "APPROVAL_REQUIRED
 
 // ---------------------------------------------------------------- tools
 
-export type ToolProvider = "sandbox" | "composio" | "hustera" | "llm";
+export type ToolProvider = "sandbox" | "composio" | "hustera" | "llm" | "instant";
 
 export interface ToolDefinition {
   id: string;
@@ -39,6 +39,11 @@ export const TOOL_REGISTRY: readonly ToolDefinition[] = [
   { id: "sandbox.research_plan", version: 1, provider: "sandbox", name: "Research plan", description: "Turns your idea into a structured demand and competition research plan with the questions to answer and sources to check.", maxCostCents: 20, requiresApproval: false, status: "READY", simulated: true },
   { id: "sandbox.offer_outline", version: 1, provider: "sandbox", name: "Offer outline", description: "Drafts an offer: audience, problem, deliverables, pricing hypotheses to test, and unit-economics worksheet.", maxCostCents: 20, requiresApproval: false, status: "READY", simulated: true },
   { id: "sandbox.compliance_checklist", version: 1, provider: "sandbox", name: "Launch checklist", description: "Lists rights, consumer-law, VAT and platform-policy items to confirm before selling in Sweden/EU.", maxCostCents: 10, requiresApproval: false, status: "READY", simulated: true },
+  { id: "instant.market_research", version: 1, provider: "instant", name: "Live market research", description: "Searches the web (Tavily, Exa, Serper or SerpApi) and summarises what buyers and competitors say, with sources. Falls back to an offline research plan if Composio Instant is unavailable.", maxCostCents: 20, requiresApproval: false, status: "READY", simulated: false },
+  { id: "instant.keyword_research", version: 1, provider: "instant", name: "Keyword research", description: "Finds search keywords for the product (DataForSEO or Semrush) for the listing and posts. Skipped if unavailable.", maxCostCents: 10, requiresApproval: false, status: "READY", simulated: false },
+  { id: "instant.competitor_prices", version: 1, provider: "instant", name: "Competitor prices", description: "Looks up comparable products and prices (SerpApi Google Shopping) to sanity-check your price. Skipped if unavailable.", maxCostCents: 3, requiresApproval: false, status: "READY", simulated: false },
+  { id: "instant.cover_image", version: 1, provider: "instant", name: "Cover image", description: "Generates an original cover image for a digital product (Black Forest Labs or Fal.ai). Shown to buyers as AI-generated. Skipped if unavailable.", maxCostCents: 10, requiresApproval: false, status: "READY", simulated: false },
+  { id: "instant.market_snapshot", version: 1, provider: "instant", name: "Market snapshot", description: "Fetches current crypto and stock prices (CoinGecko, Finnhub, Alpha Vantage). Information only — no trading.", maxCostCents: 3, requiresApproval: false, status: "READY", simulated: false },
   { id: "sandbox.promo_drafts", version: 1, provider: "sandbox", name: "Promotion drafts", description: "Writes three post variants announcing your product, with the price and a link.", maxCostCents: 10, requiresApproval: false, status: "READY", simulated: true },
   { id: "hustera.promote_post", version: 1, provider: "hustera", name: "Post to your followers", description: "Publishes the approved promotion post to your Hustera feed, linking to the product.", maxCostCents: 0, requiresApproval: true, status: "READY", simulated: false },
   { id: "sandbox.listing_draft", version: 1, provider: "sandbox", name: "Listing draft", description: "Writes a product listing draft for your review. Nothing is published.", maxCostCents: 30, requiresApproval: true, status: "READY", simulated: true },
@@ -56,7 +61,7 @@ export function getTool(id: string): ToolDefinition | undefined {
 
 // ---------------------------------------------------------------- missions & planning
 
-export type MissionKind = "start_business" | "sell_existing" | "promote_product";
+export type MissionKind = "start_business" | "sell_existing" | "promote_product" | "market_watch";
 export type MissionMode = "approve_each" | "autonomous";
 export type MissionStatus = "active" | "paused" | "blocked" | "completed" | "stopped";
 
@@ -64,6 +69,7 @@ export const MISSION_KIND_LABEL: Record<MissionKind, string> = {
   start_business: "Start a business for me",
   sell_existing: "Sell my existing product",
   promote_product: "Promote one of my products",
+  market_watch: "Market snapshot (information only)",
 };
 
 export interface PlannedTask {
@@ -85,21 +91,27 @@ export function planMission(kind: MissionKind, opts: { externalChannel?: boolean
       { key: "post", agentId: "contentflow", toolId: "hustera.promote_post", title: "Post to your followers", dependsOn: ["promo"] },
     ];
   }
+  if (kind === "market_watch") {
+    return [{ key: "snapshot", agentId: "markets", toolId: "instant.market_snapshot", title: "Fetch a market snapshot", dependsOn: [] }];
+  }
   const plan: PlannedTask[] = [
-    { key: "research", agentId: "research", toolId: "sandbox.research_plan", title: kind === "start_business" ? "Research demand and feasibility" : "Research audience and competitors", dependsOn: [] },
-    { key: "offer", agentId: "core", toolId: "sandbox.offer_outline", title: kind === "start_business" ? "Outline a first offer to test" : "Evaluate offer and unit economics", dependsOn: ["research"] },
+    { key: "research", agentId: "research", toolId: "instant.market_research", title: kind === "start_business" ? "Research demand and feasibility" : "Research audience and competitors", dependsOn: [] },
+    { key: "seo", agentId: "seo", toolId: "instant.keyword_research", title: "Find search keywords", dependsOn: ["research"] },
+    { key: "prices", agentId: "ecompro", toolId: "instant.competitor_prices", title: "Check competitor prices", dependsOn: ["research"] },
+    { key: "offer", agentId: "core", toolId: "sandbox.offer_outline", title: kind === "start_business" ? "Outline a first offer to test" : "Evaluate offer and unit economics", dependsOn: ["research", "prices"] },
   ];
   const publishDeps = ["listing", "checklist"];
   if (kind === "start_business") {
     plan.push(
       { key: "generate", agentId: "designstudio", toolId: "ai.generate_product", title: "Create the digital product", dependsOn: ["offer"] },
-      { key: "rights", agentId: "core", toolId: "hustera.rights_qa", title: "Review rights and quality", dependsOn: ["generate"] },
+      { key: "cover", agentId: "designstudio", toolId: "instant.cover_image", title: "Create a cover image", dependsOn: ["generate"] },
+      { key: "rights", agentId: "core", toolId: "hustera.rights_qa", title: "Review rights and quality", dependsOn: ["generate", "cover"] },
     );
     publishDeps.push("rights");
   }
   plan.push(
     { key: "checklist", agentId: "core", toolId: "sandbox.compliance_checklist", title: "Prepare launch checklist", dependsOn: ["offer"] },
-    { key: "listing", agentId: "ecompro", toolId: "sandbox.listing_draft", title: "Draft a product listing", dependsOn: ["offer"] },
+    { key: "listing", agentId: "ecompro", toolId: "sandbox.listing_draft", title: "Write the product listing", dependsOn: ["offer", "seo"] },
     { key: "publish", agentId: "ecompro", toolId: "hustera.publish_to_store", title: "Publish to your Hustera store", dependsOn: publishDeps },
     { key: "promo", agentId: "contentflow", toolId: "sandbox.promo_drafts", title: "Draft promotion posts", dependsOn: ["publish"] },
     { key: "post", agentId: "contentflow", toolId: "hustera.promote_post", title: "Announce it to your followers", dependsOn: ["promo"] },

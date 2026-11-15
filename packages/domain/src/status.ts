@@ -10,7 +10,7 @@ export const STATUS_LABEL: Record<FeatureStatus, string> = {
   NOT_BUILT: "Not built yet",
 };
 
-export type AgentLaunch = "sell_existing" | "start_business" | "promote_product";
+export type AgentLaunch = "sell_existing" | "start_business" | "promote_product" | "market_watch";
 
 export interface AgentDefinition {
   id: string;
@@ -43,19 +43,19 @@ export const AGENT_REGISTRY: readonly AgentDefinition[] = [
   {
     id: "ecompro", name: "EcomPro", role: "E-commerce agent", family: "Commerce", icon: "bag", accent: "#6558F5", featured: true, launch: "sell_existing", milestone: "C", status: "VERIFIED",
     summary: "Sells a product you own: prepares the offer and listing, publishes it to your store, promotes it to your followers and tracks real sales.",
-    capabilities: ["Researches your audience and competitors (checklist)", "Builds the offer and unit-economics worksheet", "Writes the listing and launch checklist", "Publishes to your Hustera store after your approval", "Announces it to your followers after your approval", "Tracks orders, revenue and refunds in your wallet"],
+    capabilities: ["Researches buyers and competitors on the live web (Composio Instant: Tavily, Exa, Serper, SerpApi, Firecrawl)", "Checks competitor prices (SerpApi Google Shopping) and finds keywords (DataForSEO, Semrush)", "Builds the offer, launch checklist and an AI-written listing (Gemini, OpenAI or OpenRouter)", "Publishes to your Hustera store after your approval", "Announces it to your followers after your approval", "Tracks orders, revenue and refunds in your wallet"],
   },
   {
     id: "contentflow", name: "ContentFlow", role: "Social media agent", family: "Marketing", icon: "play", accent: "#FF5C8A", featured: true, launch: "promote_product", milestone: "F", status: "VERIFIED",
     summary: "Turns one of your products into promotion posts and publishes them to your Hustera audience with your approval. YouTube, TikTok and Instagram via Composio.",
-    capabilities: ["Drafts three post variants for a product", "Publishes the one you approve to your feed", "External networks once connected via Composio"],
+    capabilities: ["Writes three post variants with AI (Gemini, OpenAI or OpenRouter via Composio Instant)", "Publishes the one you approve to your feed", "External networks once connected via Composio"],
     needs: "External networks need a Composio connection",
   },
   {
     id: "designstudio", name: "DesignStudio", role: "AI design agent", family: "Creative", icon: "palette", accent: "#C04CF5", featured: true, launch: "start_business", milestone: "D", status: "NEEDS_CONNECTION",
     summary: "Creates a new digital product (guide, template, checklist) from your idea with AI, then lists and sells it after your rights review.",
-    capabilities: ["Writes the full product with the configured AI model", "Requires your rights & quality review", "Publishes and delivers it automatically after payment"],
-    needs: "Needs an AI model key (ANTHROPIC_API_KEY or OPENAI_API_KEY)",
+    capabilities: ["Researches the niche on the live web", "Writes the full product with AI (Gemini via Composio Instant, or your own model key)", "Creates an original cover image (Black Forest Labs or Fal.ai)", "Requires your rights & quality review", "Publishes and delivers it automatically after payment"],
+    needs: "Needs Composio Instant (COMPOSIO_API_KEY) or an AI model key",
   },
   {
     id: "webbuilder", name: "WebBuilder", role: "Website agent", family: "Build", icon: "globe", accent: "#2FA8FF", featured: true, milestone: "F", status: "NOT_BUILT",
@@ -63,11 +63,11 @@ export const AGENT_REGISTRY: readonly AgentDefinition[] = [
     capabilities: ["Planned: landing pages for your products", "Planned: deploy to your own domain"],
   },
   { id: "core", name: "Hustera Core", role: "Orchestrator", family: "Orchestrator", icon: "bot", accent: "#4EF2C2", milestone: "B", status: "VERIFIED", summary: "Plans every mission, dispatches tasks to specialist agents within your budget and approvals, and records every result.", capabilities: ["Deterministic planning", "Budget reservations and approvals", "Pause, stop and kill switch"] },
-  { id: "research", name: "Market Research", role: "Research agent", family: "Research", icon: "search", accent: "#8893AD", milestone: "B", status: "TESTED_SIMULATION", summary: "Drafts a structured research plan from your brief. Live research with cited sources comes later.", capabilities: ["Research plan and decision rule"] },
-  { id: "seo", name: "SEO", role: "Search agent", family: "Marketing", icon: "trend", accent: "#8893AD", milestone: "F", status: "NOT_BUILT", summary: "Keyword research and on-page recommendations.", capabilities: [] },
+  { id: "research", name: "Market Research", role: "Research agent", family: "Research", icon: "search", accent: "#2FA8FF", milestone: "F", status: "NEEDS_CONNECTION", summary: "Searches the live web and summarises demand and competitors with sources, inside every product mission.", capabilities: ["Web search via Tavily, Exa, Serper or SerpApi", "Summary with cited sources via Gemini/OpenAI", "Offline research plan when Composio is unavailable"], needs: "Composio Instant (COMPOSIO_API_KEY)" },
+  { id: "seo", name: "SEO", role: "Search agent", family: "Marketing", icon: "trend", accent: "#FFC861", milestone: "F", status: "NEEDS_CONNECTION", summary: "Finds the keywords buyers search for and works them into your listing and posts.", capabilities: ["Keyword ideas via DataForSEO or Semrush", "Feeds the listing writer"], needs: "Composio Instant (COMPOSIO_API_KEY)" },
   { id: "support", name: "Support", role: "Customer service agent", family: "Operations", icon: "chat", accent: "#8893AD", milestone: "C", status: "NOT_BUILT", summary: "Drafts replies to customer questions, returns and refunds.", capabilities: [] },
   { id: "finance", name: "Finance", role: "Bookkeeping agent", family: "Operations", icon: "ledger", accent: "#8893AD", milestone: "C", status: "NOT_BUILT", summary: "Reconciles verified payments, costs and refunds into a profit ledger.", capabilities: [] },
-  { id: "markets", name: "Stock & Crypto Research", role: "Research agent", family: "Research", icon: "chart", accent: "#8893AD", milestone: "F", status: "NOT_BUILT", summary: "Information, backtesting and paper trading only. No real trades.", capabilities: [] },
+  { id: "markets", name: "MarketWatch", role: "Stock & crypto research", family: "Research", icon: "chart", accent: "#F7931A", milestone: "F", status: "NEEDS_CONNECTION", launch: "market_watch", summary: "Fetches current crypto and stock prices for a watchlist. Information only — no trading, no advice, no custody.", capabilities: ["Crypto prices via CoinGecko", "Stock quotes via Finnhub or Alpha Vantage", "Never trades or moves money"], needs: "Composio Instant (COMPOSIO_API_KEY)" },
 ];
 
 export function getAgent(id: string): AgentDefinition | undefined {

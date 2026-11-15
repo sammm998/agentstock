@@ -4,7 +4,9 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import {
+  INSTANT_CATALOG,
   OPPORTUNITY_TEMPLATES,
+  canOnPlatform,
   getAgent,
   channelSchema,
   costSchema,
@@ -35,6 +37,7 @@ import * as commerce from "@/server/commerce";
 import * as marketplace from "@/server/marketplace";
 import * as composio from "@/server/composio";
 import * as events from "@/server/events";
+import * as instant from "@/server/instant";
 import { markAllRead } from "@/server/notifications";
 import type { ActionState } from "@/components/action-form";
 
@@ -715,5 +718,25 @@ export async function deleteEventAction(fd: FormData): Promise<ActionState> {
   return run(async () => {
     const viewer = await requireViewer();
     await events.deleteEvent(viewer.id, id(fd, "eventId"));
+  });
+}
+
+// ---------------------------------------------------------------- composio instant
+
+export async function discoverInstantAction(): Promise<ActionState> {
+  return run(async () => {
+    const viewer = await requireViewer();
+    if (!canOnPlatform(viewer.role, "adjust_sparks")) throw new UserError("Only admins can run discovery");
+    if (!instant.instantConfigured()) throw new UserError("Composio Instant is not configured (COMPOSIO_API_KEY)");
+    const used = INSTANT_CATALOG.filter((t) => t.usedBy.length > 0);
+    const results: string[] = [];
+    for (const t of used) {
+      try {
+        results.push(`${t.name}: ${(await instant.discoverToolkit(t.slug)).length}`);
+      } catch (e) {
+        results.push(`${t.name}: ${e instanceof Error ? e.message : "failed"}`);
+      }
+    }
+    return `Discovery finished — ${results.join(", ")}`;
   });
 }

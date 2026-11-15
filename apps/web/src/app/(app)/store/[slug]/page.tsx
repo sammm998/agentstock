@@ -28,7 +28,11 @@ export default async function StorefrontPage({ params }: { params: Promise<{ slu
         <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {products.map((p) => (
             <li key={p.id}>
-              <Link href={`/store/${store.slug}/${p.id}`} className="card flex h-full flex-col p-5 hover:border-indigo/50">
+              <Link href={`/store/${store.slug}/${p.id}`} className="card flex h-full flex-col overflow-hidden p-5 hover:border-indigo/50">
+                {p.image_url && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={p.image_url} alt="" className="-mx-5 -mt-5 mb-4 aspect-[16/9] w-[calc(100%+2.5rem)] max-w-none object-cover" referrerPolicy="no-referrer" />
+                )}
                 <span className="chip w-fit capitalize">{p.kind}</span>
                 <h2 className="mt-3 font-semibold">{p.title}</h2>
                 <p className="mt-1 line-clamp-3 flex-1 text-sm text-muted">{p.description}</p>

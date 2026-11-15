@@ -2,10 +2,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { ArrowLeft, Check } from "lucide-react";
-import { OPPORTUNITY_TEMPLATES, getAgent } from "@hustera/domain";
+import { INSTANT_CATALOG, OPPORTUNITY_TEMPLATES, getAgent } from "@hustera/domain";
 import { getViewer } from "@/server/session";
 import { getMyStore, myProducts } from "@/server/commerce";
 import { llmConfig } from "@/server/llm";
+import { instantConfigured } from "@/server/instant";
 import { agentUsage } from "@/server/agents";
 import { createMissionAction } from "@/app/actions";
 import { ActionForm } from "@/components/action-form";
@@ -50,6 +51,8 @@ export default async function AgentPage({ params, searchParams }: { params: Prom
   const live = products.filter((p) => p.status === "active");
   const u = usage.find((x) => x.agent_id === agent.id);
   const llm = llmConfig();
+  const instantOn = instantConfigured();
+  const instantToolkits = INSTANT_CATALOG.filter((t) => t.usedBy.includes(agent.id));
 
   return (
     <div className="mx-auto grid max-w-5xl gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
@@ -76,18 +79,27 @@ export default async function AgentPage({ params, searchParams }: { params: Prom
         {viewer && agent.launch && (
           <section className="card p-6" aria-labelledby="use-h">
             <h2 id="use-h" className="text-lg font-semibold">Use {agent.name}</h2>
-            {!store && agent.launch !== "promote_product" && (
+            {!store && agent.launch !== "promote_product" && agent.launch !== "market_watch" && (
               <p className="mt-2 rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-sm">You don&apos;t have a store yet. The agent will prepare everything and wait for you at the publishing step — or <Link href="/store" className="underline">create your store now</Link> (takes one minute).</p>
             )}
-            {agent.launch === "start_business" && !llm.provider && (
-              <p className="mt-2 rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-sm">No AI model is connected, so the product-writing step will wait. Everything else runs. Add <code>ANTHROPIC_API_KEY</code> or <code>OPENAI_API_KEY</code> to enable it.</p>
+            {((agent.launch === "start_business" && !llm.provider) || (agent.launch === "market_watch" && !instantOn)) && (
+              <p className="mt-2 rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-sm">{agent.launch === "market_watch" ? <>Market data comes from Composio Instant, which isn&apos;t configured yet (<code>COMPOSIO_API_KEY</code>). The mission will wait instead of showing made-up prices.</> : <>No AI model is connected, so the product-writing step will wait. Everything else runs. Add <code>COMPOSIO_API_KEY</code> (Gemini via Composio Instant) or your own model key to enable it.</>}</p>
             )}
             <ActionForm action={createMissionAction} className="mt-5 space-y-5">
               <input type="hidden" name="kind" value={agent.launch} />
               <input type="hidden" name="agentId" value={agent.id} />
               {template && <input type="hidden" name="templateId" value={template.id} />}
               <input type="hidden" name="region" value="Sweden" />
-              {agent.launch === "promote_product" ? (
+              {agent.launch === "market_watch" ? (
+                <>
+                  <input type="hidden" name="title" value="Market snapshot" />
+                  <div>
+                    <label className="label" htmlFor="brief">Watchlist</label>
+                    <textarea id="brief" name="brief" required minLength={10} maxLength={500} rows={2} defaultValue="bitcoin, ethereum, AAPL, MSFT" className="input" />
+                    <p className="mt-1 text-xs text-muted">Crypto by name (bitcoin, ethereum, solana…) and stocks by ticker in capitals (AAPL, MSFT). Information only — Hustera never trades.</p>
+                  </div>
+                </>
+              ) : agent.launch === "promote_product" ? (
                 live.length ? (
                   <>
                     <div>
@@ -144,7 +156,7 @@ export default async function AgentPage({ params, searchParams }: { params: Prom
       </div>
 
       <aside className="space-y-4">
-        <section className="card p-5 text-sm">
+        {agent.launch !== "market_watch" && <section className="card p-5 text-sm">
           <h2 className="font-semibold">How {agent.name} earns with you</h2>
           <ol className="mt-3 list-decimal space-y-2 pl-5 text-muted">
             <li>You describe the product and set a price and budget.</li>
@@ -154,7 +166,14 @@ export default async function AgentPage({ params, searchParams }: { params: Prom
             <li>Every sale, refund and cost shows up in your wallet.</li>
           </ol>
           <p className="mt-3 text-xs text-muted">No guaranteed results. Real payments need Stripe connected; until then sales run through the labelled test checkout.</p>
-        </section>
+        </section>}
+        {instantToolkits.length > 0 && (
+          <section className="card p-5 text-sm">
+            <h2 className="font-semibold">Powered by Composio Instant</h2>
+            <p className="mt-1 text-xs text-muted">Billed per call to Hustera&apos;s Composio wallet and capped by your mission budget.</p>
+            <ul className="mt-3 flex flex-wrap gap-2">{instantToolkits.map((t) => <li key={t.slug} className="chip">{t.name}{t.active ? " · active" : ""}</li>)}</ul>
+          </section>
+        )}
       </aside>
     </div>
   );

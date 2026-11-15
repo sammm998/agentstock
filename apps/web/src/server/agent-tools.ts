@@ -1,5 +1,6 @@
 import "server-only";
-import { extractTags, formatCents, type MissionKind } from "@hustera/domain";
+import { extractTags, findPrices, findResults, findUrls, formatCents, median, type MissionKind } from "@hustera/domain";
+import { InstantUnavailable, instantConfigured, runInstant } from "./instant";
 import type { Queryable } from "./db";
 import { createProduct, setProductStatus } from "./commerce";
 import { activeConnection, composioConfigured, executeComposioTool, publishTarget } from "./composio";
@@ -137,11 +138,12 @@ function excerpt(markdown: string | undefined, max = 1500) {
 }
 
 async function generateProduct(ctx: ToolContext): Promise<ToolOutcome> {
-  if (!llmConfig().provider) return { ok: false, blocked: true, reason: "CONNECT_REQUIRED: no AI model is configured. Set ANTHROPIC_API_KEY (or OPENAI_API_KEY) to generate products." };
+  if (!llmConfig().provider) return { ok: false, blocked: true, reason: "CONNECT_REQUIRED: no AI model is configured. Set COMPOSIO_API_KEY (Gemini via Composio Instant), ANTHROPIC_API_KEY or OPENAI_API_KEY to generate products." };
   try {
     const r = await generateText(
       "You write practical digital products (guides, templates, checklists) in Markdown for small online sellers. Be concrete and useful. Never invent statistics, testimonials, earnings or guarantees. Do not copy or imitate trademarks or copyrighted works. Write in the language of the brief.",
       `Product idea: ${ctx.title}\nBrief: ${ctx.brief}\nMarket: ${ctx.region}\n\nOffer outline:\n${excerpt(ctx.inputs.offer)}\n\nWrite the complete product content (800–1500 words) with a title, a short introduction, structured sections and a closing checklist.`,
+      { db: ctx.db },
     );
     if (r.text.length < 200) return { ok: false, blocked: false, error: "The model returned too little content" };
     return {
@@ -163,11 +165,16 @@ async function publishToStore(ctx: ToolContext): Promise<ToolOutcome> {
   const generated = ctx.kind === "start_business" ? ctx.inputs.generate : undefined;
   const kind = ctx.kind === "start_business" ? "digital" : ctx.productKind;
   const delivery = generated ?? ctx.deliveryContent;
+  // Use the AI-written listing (approved by the user) as the description when there is one.
+  const listing = ctx.inputs.listing?.startsWith("_AI-written listing") ? ctx.inputs.listing.replace(/^_AI-written listing[^\n]*\n+/, "").replace(/^# [^\n]*\n+/, "").trim() : "";
+  const description = (listing.length >= 40 ? listing : ctx.brief).slice(0, 5000);
   const productId = await createProduct(
     ctx.ownerId,
-    { title: ctx.title.slice(0, 100), description: ctx.brief, kind, priceCents: ctx.priceCents, deliveryContent: delivery, ownershipConfirmed: true, source: "agent", missionId: ctx.missionId },
+    { title: ctx.title.slice(0, 100), description, kind, priceCents: ctx.priceCents, deliveryContent: delivery, ownershipConfirmed: true, source: "agent", missionId: ctx.missionId },
     ctx.db,
   );
+  const cover = ctx.inputs.cover ? findUrls(ctx.inputs.cover.split(/\s+/)).find((u) => u.startsWith("https://")) : undefined;
+  if (cover) await ctx.db.query(`update products set image_url = $2 where id = $1`, [productId, cover]);
   const canGoLive = kind !== "digital" || delivery.trim().length > 0;
   if (canGoLive) {
     await setProductStatus(ctx.ownerId, productId, "active", ctx.db);
@@ -207,7 +214,7 @@ async function promoDrafts(ctx: ToolContext): Promise<ToolOutcome> {
       const r = await generateText(
         "You write short, honest social posts announcing a product. No hype, no income or results claims, no fake scarcity. Max 260 characters each. Return exactly three posts separated by a line containing only ---.",
         `Product: ${p.title}\nDescription: ${p.description.slice(0, 800)}\nPrice: ${formatCents(p.price_cents, p.currency)}\nLink to include: /store/${p.slug}/${p.id}`,
-        { maxTokens: 500 },
+        { maxTokens: 500, db: ctx.db },
       );
       const parsed = r.text.split(/\n-{3,}\n/).map((x) => x.trim()).filter((x) => x.length > 20 && x.length <= 600);
       if (parsed.length >= 1) {
@@ -252,7 +259,208 @@ async function publishExternal(ctx: ToolContext): Promise<ToolOutcome> {
   }
 }
 
+function skipped(title: string, reason: string): ToolOutcome {
+  return { ok: true, result: { costCents: 0, message: `Skipped — ${reason}`, artifact: { kind: "skipped", title, content: `# ${title}\n\n_Skipped: ${reason}_` } } };
+}
+
+function instantReason(e: unknown) {
+  return e instanceof InstantUnavailable ? e.message : e instanceof Error ? e.message : "Composio Instant call failed";
+}
+
+async function marketResearch(ctx: ToolContext): Promise<ToolOutcome> {
+  const fallback = () => {
+    const r = SANDBOX["sandbox.research_plan"]!(ctx);
+    return { ok: true as const, result: { ...r, message: `${r.message} (offline — Composio Instant unavailable)` } };
+  };
+  if (!instantConfigured()) return fallback();
+  try {
+    const search = await runInstant("web_search", { query: `${ctx.title} ${ctx.brief.slice(0, 120)} reviews price buyers` }, { db: ctx.db });
+    const results = findResults(search.data, 6);
+    if (!results.length) return fallback();
+    let summary = "";
+    let cost = search.maxCostCents;
+    if (llmConfig().provider) {
+      try {
+        const r = await generateText(
+          "You are a market researcher. Summarise only what the sources say. Cite sources as [1], [2]. No invented numbers, no income promises. Use short Markdown bullet points under the headings: ## What buyers want, ## Competitors and prices, ## Risks, ## Recommendation.",
+          `Product: ${ctx.title}\nBrief: ${ctx.brief}\nMarket: ${ctx.region}\n\nSources:\n${results.map((x, i) => `[${i + 1}] ${x.title} — ${x.url}\n${x.snippet}`).join("\n\n")}`,
+          { maxTokens: 900, db: ctx.db },
+        );
+        summary = r.text;
+        cost += r.costCents;
+      } catch {
+        summary = "";
+      }
+    }
+    const content = [
+      `# Market research: ${ctx.title}`,
+      `_Live web search via Composio Instant (${search.toolkit}). ${summary ? "Summary written by AI from the sources below — check them before acting." : "Sources only; no AI summary available."}_`,
+      summary,
+      "## Sources",
+      results.map((x, i) => `${i + 1}. **${x.title}** — ${x.url}${x.snippet ? `\n   ${x.snippet}` : ""}`).join("\n"),
+    ].filter(Boolean).join("\n\n");
+    return { ok: true, result: { costCents: cost, message: `Researched ${results.length} live sources via ${search.toolkit}`, artifact: { kind: "research", title: `Market research — ${ctx.title}`, content } } };
+  } catch {
+    return fallback();
+  }
+}
+
+function findKeywords(value: unknown): { keyword: string; volume: number | null }[] {
+  const out: { keyword: string; volume: number | null }[] = [];
+  const walk = (v: unknown, d: number) => {
+    if (d > 8 || v == null || out.length >= 25) return;
+    if (Array.isArray(v)) return v.forEach((x) => walk(x, d + 1));
+    if (typeof v !== "object") return;
+    const o = v as Record<string, unknown>;
+    if (typeof o.keyword === "string") {
+      const vol = [o.search_volume, o.volume, (o.keyword_info as Record<string, unknown> | undefined)?.search_volume].find((x) => typeof x === "number") as number | undefined;
+      out.push({ keyword: o.keyword, volume: vol ?? null });
+      return;
+    }
+    Object.values(o).forEach((x) => walk(x, d + 1));
+  };
+  walk(value, 0);
+  return out;
+}
+
+async function keywordResearch(ctx: ToolContext): Promise<ToolOutcome> {
+  if (!instantConfigured()) return skipped("Keyword research", "Composio Instant is not configured");
+  try {
+    const r = await runInstant("keywords", { keyword: ctx.title }, { db: ctx.db });
+    const kws = findKeywords(r.data).sort((a, b) => (b.volume ?? 0) - (a.volume ?? 0)).slice(0, 15);
+    if (!kws.length) return skipped("Keyword research", `${r.tool} returned no keywords`);
+    return {
+      ok: true,
+      result: {
+        costCents: r.maxCostCents,
+        message: `Found ${kws.length} keywords via ${r.toolkit}`,
+        artifact: { kind: "keywords", title: `Keywords — ${ctx.title}`, content: `# Keywords\n\n_Via Composio Instant (${r.toolkit}). Volumes as reported by the provider._\n\n| Keyword | Monthly searches |\n| --- | --- |\n${kws.map((k) => `| ${k.keyword} | ${k.volume ?? "–"} |`).join("\n")}` },
+      },
+    };
+  } catch (e) {
+    return skipped("Keyword research", instantReason(e));
+  }
+}
+
+async function competitorPrices(ctx: ToolContext): Promise<ToolOutcome> {
+  if (!instantConfigured()) return skipped("Competitor prices", "Composio Instant is not configured");
+  try {
+    const r = await runInstant("shopping_search", { query: ctx.title }, { db: ctx.db });
+    const prices = findPrices(r.data).filter((p) => p >= 50);
+    const items = findResults(r.data, 8);
+    if (!prices.length) return skipped("Competitor prices", `${r.tool} returned no prices`);
+    const mid = median(prices)!;
+    const yours = ctx.priceCents;
+    const position = yours < mid * 0.7 ? "well below" : yours > mid * 1.3 ? "well above" : "close to";
+    return {
+      ok: true,
+      result: {
+        costCents: r.maxCostCents,
+        message: `Compared ${prices.length} competitor prices via ${r.toolkit}`,
+        artifact: {
+          kind: "prices",
+          title: `Competitor prices — ${ctx.title}`,
+          content: `# Competitor prices\n\n_Via Composio Instant (${r.toolkit}). Comparable listings may differ in size, quality and currency — use as a sanity check._\n\n| | Price |\n| --- | --- |\n| Lowest | ${formatCents(Math.min(...prices))} |\n| Median | ${formatCents(mid)} |\n| Highest | ${formatCents(Math.max(...prices))} |\n| **Your price** | **${formatCents(yours)}** |\n\nYour price is ${position} the median of ${prices.length} listings. Your price is not changed automatically.${items.length ? `\n\n## Listings\n${items.map((x) => `- ${x.title} — ${x.url}`).join("\n")}` : ""}`,
+        },
+      },
+    };
+  } catch (e) {
+    return skipped("Competitor prices", instantReason(e));
+  }
+}
+
+async function coverImage(ctx: ToolContext): Promise<ToolOutcome> {
+  if (!instantConfigured()) return skipped("Cover image", "Composio Instant is not configured");
+  try {
+    const r = await runInstant("image", { prompt: `Clean, modern cover image for a digital product titled "${ctx.title}". ${ctx.brief.slice(0, 200)}. No text, no logos, no real people, no trademarks.` }, { db: ctx.db });
+    const url = findUrls(r.data).find((u) => u.startsWith("https://"));
+    if (!url) return skipped("Cover image", `${r.tool} returned no image URL`);
+    return { ok: true, result: { costCents: r.maxCostCents, message: `Cover image created via ${r.toolkit}`, artifact: { kind: "cover_image", title: "Cover image", content: `# Cover image\n\n_AI-generated via Composio Instant (${r.toolkit}). Shown to buyers as AI-generated._\n\n${url}` } } };
+  } catch (e) {
+    return skipped("Cover image", instantReason(e));
+  }
+}
+
+const CRYPTO = /^(bitcoin|ethereum|solana|cardano|ripple|dogecoin|polkadot|litecoin|tether|usd-coin|binancecoin|avalanche-2|chainlink|tron)$/;
+
+async function marketSnapshot(ctx: ToolContext): Promise<ToolOutcome> {
+  if (!instantConfigured()) return { ok: false, blocked: true, reason: "CONNECT_REQUIRED: market data comes from Composio Instant (COMPOSIO_API_KEY). No prices are shown without a real source." };
+  const words = `${ctx.title} ${ctx.brief}`.split(/[\s,;]+/).map((w) => w.trim()).filter(Boolean);
+  const crypto = [...new Set(words.map((w) => w.toLowerCase()).filter((w) => CRYPTO.test(w)))].slice(0, 10);
+  const stocks = [...new Set(words.filter((w) => /^[A-Z]{1,5}$/.test(w)))].slice(0, 5);
+  if (!crypto.length && !stocks.length) return { ok: false, blocked: false, error: "Add a watchlist to the brief, e.g. “bitcoin, ethereum, AAPL, MSFT”." };
+  const rows: string[] = [];
+  let cost = 0;
+  const errors: string[] = [];
+  if (crypto.length) {
+    try {
+      const r = await runInstant("crypto_price", { ids: crypto.join(",") }, { db: ctx.db });
+      cost += r.maxCostCents;
+      const data = (r.data && typeof r.data === "object" ? r.data : {}) as Record<string, unknown>;
+      const flat = (typeof data.data === "object" && data.data ? data.data : data) as Record<string, { eur?: number }>;
+      for (const id of crypto) rows.push(`| ${id} | ${typeof flat[id]?.eur === "number" ? `€${flat[id]!.eur!.toLocaleString("en-IE")}` : "–"} | ${r.toolkit} |`);
+    } catch (e) {
+      errors.push(instantReason(e));
+    }
+  }
+  for (const symbol of stocks) {
+    try {
+      const r = await runInstant("stock_quote", { symbol }, { db: ctx.db });
+      cost += r.maxCostCents;
+      const o = (r.data && typeof r.data === "object" ? r.data : {}) as Record<string, unknown>;
+      const inner = (o["Global Quote"] ?? o.data ?? o) as Record<string, unknown>;
+      const price = [inner.c, inner.price, inner["05. price"]].find((x) => x !== undefined && x !== null);
+      rows.push(`| ${symbol} | ${price ?? "–"} | ${r.toolkit} |`);
+    } catch (e) {
+      errors.push(instantReason(e));
+    }
+  }
+  if (!rows.length) return { ok: false, blocked: false, error: errors.join("; ").slice(0, 400) || "No prices returned" };
+  return {
+    ok: true,
+    result: {
+      costCents: cost,
+      message: `Fetched ${rows.length} prices`,
+      artifact: {
+        kind: "market_snapshot",
+        title: `Market snapshot — ${new Date().toISOString().slice(0, 16).replace("T", " ")} UTC`,
+        content: `# Market snapshot\n\n_Information only. Not investment advice. Hustera does not trade, hold funds or execute orders._\n\n| Asset | Price | Source |\n| --- | --- | --- |\n${rows.join("\n")}${errors.length ? `\n\n_Some lookups failed: ${errors.join("; ").slice(0, 300)}_` : ""}`,
+      },
+    },
+  };
+}
+
+async function listingDraft(ctx: ToolContext): Promise<ToolOutcome> {
+  const template = SANDBOX["sandbox.listing_draft"]!(ctx);
+  if (!llmConfig().provider) return { ok: true, result: template };
+  try {
+    const r = await generateText(
+      "You write honest, specific product listings for small online sellers. No hype, no income or results promises, no fake scarcity, no claims that aren't in the brief. Markdown with: a title line starting with '# ', a 2–3 sentence description, '## What's included' bullets, '## Who it's for' bullets.",
+      `Product: ${ctx.title}\nBrief: ${ctx.brief}\nPrice: ${formatCents(ctx.priceCents)}\n\nKeywords to use naturally where accurate:\n${excerpt(ctx.inputs.seo, 600)}\n\nOffer notes:\n${excerpt(ctx.inputs.offer, 800)}`,
+      { maxTokens: 700, db: ctx.db },
+    );
+    if (r.text.length < 80) return { ok: true, result: template };
+    return { ok: true, result: { costCents: r.costCents, message: `Listing written with ${r.model}`, artifact: { kind: "listing_draft", title: `Listing — ${ctx.title}`, content: `_AI-written listing (${r.model}) — review before approving._\n\n${r.text}` } } };
+  } catch {
+    return { ok: true, result: template };
+  }
+}
+
 export async function executeTool(toolId: string, ctx: ToolContext): Promise<ToolOutcome> {
+  switch (toolId) {
+    case "instant.market_research":
+      return marketResearch(ctx);
+    case "instant.keyword_research":
+      return keywordResearch(ctx);
+    case "instant.competitor_prices":
+      return competitorPrices(ctx);
+    case "instant.cover_image":
+      return coverImage(ctx);
+    case "instant.market_snapshot":
+      return marketSnapshot(ctx);
+    case "sandbox.listing_draft":
+      return listingDraft(ctx);
+  }
   const impl = SANDBOX[toolId];
   if (impl) return { ok: true, result: impl(ctx) };
   switch (toolId) {

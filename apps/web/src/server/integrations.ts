@@ -3,6 +3,7 @@ import { TOOL_REGISTRY, type CapabilityStatus } from "@hustera/domain";
 import { llmConfig } from "./llm";
 import { providerStatus } from "./payments";
 import { authConfigs } from "./composio";
+import { instantConfigured } from "./instant";
 
 export interface CapabilityRow {
   id: string;
@@ -47,11 +48,12 @@ export async function getInventory(opts: { fetchImpl?: typeof fetch; apiKey?: st
   }
 
   const llm = llmConfig();
-  const PROVIDER_LABEL = { sandbox: "Hustera sandbox", hustera: "Hustera", llm: llm.provider ? `AI model (${llm.provider})` : "AI model", composio: "Composio" } as const;
+  const PROVIDER_LABEL = { sandbox: "Hustera sandbox", hustera: "Hustera", llm: llm.provider ? `AI model (${llm.provider})` : "AI model", composio: "Composio", instant: "Composio Instant" } as const;
   const capabilities: CapabilityRow[] = TOOL_REGISTRY.filter((t) => t.id !== "channel.publish_listing").map((t) => {
     let status: CapabilityStatus;
     if (t.provider === "llm") status = llm.provider ? "READY" : "CONNECT_REQUIRED";
     else if (t.provider === "composio") status = "CONNECT_REQUIRED";
+    else if (t.provider === "instant") status = instantConfigured() ? "PARTIAL" : "CONNECT_REQUIRED";
     else status = t.requiresApproval ? "APPROVAL_REQUIRED" : "READY";
     return {
       id: `${t.id}@${t.version}`,
@@ -59,7 +61,7 @@ export async function getInventory(opts: { fetchImpl?: typeof fetch; apiKey?: st
       provider: PROVIDER_LABEL[t.provider],
       status,
       detail: t.simulated ? `${t.description} Output is a draft (simulation).` : t.description,
-      verifiedAt: t.provider === "composio" ? null : t.provider === "llm" ? "automated tests (mocked model)" : "automated tests",
+      verifiedAt: t.provider === "composio" || t.provider === "instant" ? "mocked tests only" : t.provider === "llm" ? "automated tests (mocked model)" : "automated tests",
     };
   });
   const payments = providerStatus();

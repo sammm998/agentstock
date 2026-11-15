@@ -44,6 +44,7 @@ export interface Product {
   source: string;
   source_url: string | null;
   mission_id: string | null;
+  image_url: string | null;
   created_at: Date;
 }
 

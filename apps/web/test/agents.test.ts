@@ -27,7 +27,9 @@ describe("agent runtime", () => {
     let m = (await getMission(owner, id))!;
     const status = Object.fromEntries(m.tasks.map((t) => [t.key, t.status]));
     expect(status).toMatchObject({ research: "succeeded", offer: "succeeded", checklist: "succeeded", listing: "awaiting_approval", publish: "queued" });
-    expect(m.artifacts).toHaveLength(3);
+    // research (offline fallback), seo + prices (skipped without Composio), offer, checklist
+    expect(m.artifacts).toHaveLength(5);
+    expect(m.artifacts.filter((a) => a.kind === "skipped")).toHaveLength(2);
     expect(m.spend.settledCents).toBe(12 + 15 + 5);
 
     await decideApproval(owner, m.tasks.find((t) => t.key === "listing")!.id, true);
@@ -205,6 +207,101 @@ describe("agent runtime", () => {
     await retryTask(owner, offer.id);
     await runMission(owner, id);
     expect((await getMission(owner, id))!.tasks.find((t) => t.key === "offer")!.status).toBe("blocked");
+  });
+});
+
+describe("Composio Instant agents", () => {
+  it("runs a mission on live Instant tools with fallback order and records verified tools", async () => {
+    const owner = await user();
+    await saveStore(owner, { name: "Instant shop", slug: `in-${Math.random().toString(36).slice(2, 8)}`, description: "", sellerLegalName: "Instant Owner", sellerCountry: "SE", supportEmail: "help@example.test" });
+    process.env.COMPOSIO_API_KEY = "test";
+    const calls: string[] = [];
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = (async (url: string | URL, init?: RequestInit) => {
+      const u = String(url);
+      const slug = u.split("/tools/execute/")[1] ?? "";
+      calls.push(slug);
+      const ok = (data: unknown) => new Response(JSON.stringify({ successful: true, data, error: null }));
+      // Tavily is "down" so the search falls back to Exa.
+      if (slug === "TAVILY_SEARCH") return new Response(JSON.stringify({ successful: false, data: null, error: "quota" }));
+      if (slug === "EXA_SEARCH") return ok({ results: [{ title: "Student planners compared", url: "https://blog.example/planners", text: "Students want weekly layouts" }] });
+      if (slug.startsWith("GEMINI")) {
+        const body = JSON.parse(String(init?.body ?? "{}")) as { arguments?: { prompt?: string } };
+        const p = body.arguments?.prompt ?? "";
+        if (p.includes("write practical digital products")) return ok({ text: "# Planner guide\n\n" + "Plan focused study blocks every week. ".repeat(25) });
+        if (p.includes("product listings")) return ok({ text: "# Study planner\n\nA weekly planner built for university timetables and exam prep.\n\n## What's included\n- 12 weekly pages" });
+        return ok({ text: "## What buyers want\n- Weekly layouts [1]" });
+      }
+      if (slug.startsWith("DATAFORSEO")) return ok({ items: [{ keyword: "study planner", search_volume: 1900 }, { keyword: "weekly planner pdf", search_volume: 880 }] });
+      if (slug.startsWith("SERPAPI_GOOGLE_SHOPPING")) return ok({ shopping_results: [{ title: "Planner", link: "https://shop.example/1", extracted_price: 8 }, { extracted_price: 12 }, { extracted_price: 10 }] });
+      if (slug.startsWith("BLACK_FOREST_LABS")) return ok({ result: { sample: "https://img.example/cover.png" } });
+      return new Response("not found", { status: 404 });
+    }) as typeof fetch;
+    try {
+      const id = await createMission(owner, { ...base, mode: "autonomous", totalCents: 500, perDayCents: 500, perTaskCents: 100, priceCents: 900, agentId: "designstudio" });
+      await runMission(owner, id);
+      let m = (await getMission(owner, id))!;
+      const art = (kind: string) => m.artifacts.find((a) => a.kind === kind);
+      expect(art("research")!.content).toContain("https://blog.example/planners");
+      expect(art("keywords")!.content).toContain("study planner");
+      expect(art("prices")!.content).toContain("€10.00");
+      expect(art("product_content")!.content).toContain("Planner guide");
+      expect(art("cover_image")!.content).toContain("https://img.example/cover.png");
+      expect(calls.indexOf("TAVILY_SEARCH")).toBeLessThan(calls.indexOf("EXA_SEARCH"));
+
+      for (const key of ["rights", "listing"]) await decideApproval(owner, m.tasks.find((t) => t.key === key)!.id, true);
+      await runMission(owner, id);
+      m = (await getMission(owner, id))!;
+      expect(m.artifacts.find((a) => a.kind === "listing_draft")!.content).toContain("AI-written listing");
+      await decideApproval(owner, m.tasks.find((t) => t.key === "publish")!.id, true);
+      await runMission(owner, id);
+      const [product] = await myProducts(owner);
+      expect(product).toMatchObject({ status: "active", image_url: "https://img.example/cover.png" });
+      expect(product!.description).toContain("university timetables");
+      // Instant calls are real money, so they are not marked simulated.
+      expect(m.spend.settledCents).toBeGreaterThan(0);
+      const { instantToolStatus } = await import("@/server/instant");
+      const status = await instantToolStatus();
+      expect(status.find((s) => s.tool_slug === "EXA_SEARCH")!.last_success_at).not.toBeNull();
+      expect(status.find((s) => s.tool_slug === "TAVILY_SEARCH")!.last_error).toBe("quota");
+    } finally {
+      globalThis.fetch = realFetch;
+      delete process.env.COMPOSIO_API_KEY;
+    }
+  });
+
+  it("MarketWatch refuses to show prices without a real source", async () => {
+    const owner = await user();
+    const id = await createMission(owner, { ...base, kind: "market_watch", title: "Market snapshot", brief: "bitcoin, ethereum, AAPL", mode: "autonomous", totalCents: 100, perDayCents: 100, perTaskCents: 50, agentId: "markets" });
+    await runMission(owner, id);
+    const m = (await getMission(owner, id))!;
+    expect(m.tasks[0]!.status).toBe("blocked");
+    expect(m.tasks[0]!.status_reason).toMatch(/CONNECT_REQUIRED/);
+    expect(m.artifacts).toHaveLength(0);
+  });
+
+  it("MarketWatch reports Instant prices as information only", async () => {
+    const owner = await user();
+    process.env.COMPOSIO_API_KEY = "test";
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = (async (url: string | URL) => {
+      const slug = String(url).split("/tools/execute/")[1] ?? "";
+      if (slug.startsWith("COINGECKO")) return new Response(JSON.stringify({ successful: true, data: { bitcoin: { eur: 61000 } }, error: null }));
+      if (slug.startsWith("FINNHUB")) return new Response(JSON.stringify({ successful: true, data: { c: 231.5 }, error: null }));
+      return new Response("nope", { status: 404 });
+    }) as typeof fetch;
+    try {
+      const id = await createMission(owner, { ...base, kind: "market_watch", title: "Market snapshot", brief: "bitcoin and AAPL please", mode: "autonomous", totalCents: 100, perDayCents: 100, perTaskCents: 50, agentId: "markets" });
+      await runMission(owner, id);
+      const m = (await getMission(owner, id))!;
+      const a = m.artifacts[0]!;
+      expect(a.content).toContain("€61,000");
+      expect(a.content).toContain("231.5");
+      expect(a.content).toContain("Not investment advice");
+    } finally {
+      globalThis.fetch = realFetch;
+      delete process.env.COMPOSIO_API_KEY;
+    }
   });
 });
 
