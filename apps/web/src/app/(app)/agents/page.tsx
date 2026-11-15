@@ -1,12 +1,14 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { Bot, Plug } from "lucide-react";
+import { Activity, Plug } from "lucide-react";
 import { agentUsage } from "@/server/agents";
 import { AgentIcon } from "@/components/visuals";
-import { AGENT_REGISTRY, type CapabilityStatus } from "@hustera/domain";
+import { AGENTS, AGENT_CATEGORIES, type AgentCategory, type CapabilityStatus } from "@hustera/domain";
 import { getInventory } from "@/server/integrations";
 import { getViewer } from "@/server/session";
-import { PageHeader, StatusBadge } from "@/components/ui";
+import { readiness } from "@/server/agent-catalog";
+import { PageHeader } from "@/components/ui";
+import { WorkflowMini } from "@/components/workflow-diagram";
 
 export const metadata: Metadata = { title: "Agents" };
 
@@ -19,44 +21,66 @@ const CAP_STYLE: Record<CapabilityStatus, string> = {
   BLOCKED: "border-danger/30 bg-danger/10 text-danger",
 };
 
+const CATEGORY_COPY: Record<AgentCategory, string> = {
+  Commerce: "Find products, build offers and sell them — in your store and through Stripe.",
+  Growth: "Content, social, YouTube, affiliate, SEO, email and ads that bring buyers in.",
+  Markets: "Live market data, rule-based decisions and AI notes — traded in paper portfolios.",
+  Operations: "Bookkeeping and freelance work that keeps the money side honest.",
+  Partner: "Specialist products from our partner Scoutr, available to Hustera members.",
+};
+
 export default async function AgentsPage() {
   const [viewer, inventory, usage] = await Promise.all([getViewer(), getInventory(), agentUsage()]);
+  const visible = AGENTS.filter((a) => !a.adminOnly || viewer?.role === "admin");
   return (
     <>
       <PageHeader
         title="AI Agents"
-        description="Hustera Core plans missions and dispatches tasks to specialist agents — always within your budget limits and approvals, with every result recorded."
-        actions={<><Link href="/agents/instant" className="btn-secondary">Composio Instant apps</Link>{viewer && <Link href="/agents/ecompro" className="btn-primary"><Bot size={16} aria-hidden="true" /> Start with EcomPro</Link>}</>}
+        description={`${visible.length} agents, each with a visible workflow. Hustera Core plans every mission, checks your budget before each step and waits for your approval before anything goes public.`}
+        actions={<><Link href="/live" className="btn-secondary"><Activity size={16} aria-hidden="true" /> Control room</Link><Link href="/agents/instant" className="btn-ghost">Instant apps</Link></>}
       />
-      <div className="card mb-6 border-warning/25 p-5 text-sm text-muted">
-        <strong className="text-cloud">How agents work:</strong> every agent runs inside a mission with your budget limits and approvals. Anything that publishes, posts or spends needs your OK first, and you can pause or stop at any time. Agents never promise income — they do the work, you see the real results in your wallet.
+      <div className="card mb-8 border-warning/25 p-5 text-sm text-muted">
+        <strong className="text-cloud">How agents work:</strong> every agent runs inside a mission with your budget limits and approvals. You see each step live, can pause or stop at any time, and every sale, click and trade lands in your notifications and wallet. Agents never promise income.
       </div>
 
-      <h2 className="eyebrow mb-3">Agents</h2>
-      <ul className="mb-10 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {AGENT_REGISTRY.map((a) => {
-          const u = usage.find((x) => x.agent_id === a.id);
-          return (
-            <li key={a.id} className="card glow-border lift flex flex-col p-5">
-              <div className="flex items-start gap-3">
-                <AgentIcon icon={a.icon} accent={a.accent} />
-                <div className="flex-1">
-                  <h3 className="font-semibold">{a.name}</h3>
-                  <p className="text-xs text-muted">{a.role}</p>
-                </div>
-                <StatusBadge status={a.status} />
+      {AGENT_CATEGORIES.map((cat) => {
+        const list = visible.filter((a) => a.category === cat);
+        if (!list.length) return null;
+        return (
+          <section key={cat} className="mb-10" aria-labelledby={`cat-${cat}`}>
+            <div className="mb-4 flex flex-wrap items-end justify-between gap-2">
+              <div>
+                <h2 id={`cat-${cat}`} className="text-xl font-bold">{cat}</h2>
+                <p className="text-sm text-muted">{CATEGORY_COPY[cat]}</p>
               </div>
-              <p className="mt-3 flex-1 text-sm text-muted">{a.summary}</p>
-              {u && <p className="mt-3 text-xs text-muted">{u.missions} missions · {u.live_products} live products</p>}
-              {a.launch ? (
-                <Link href={`/agents/${a.id}`} className="btn-primary btn-sm mt-4">Use Agent</Link>
-              ) : (
-                <span className="btn-secondary btn-sm mt-4 cursor-default opacity-70">{a.status === "NOT_BUILT" ? "Coming soon" : "Runs inside missions"}</span>
-              )}
-            </li>
-          );
-        })}
-      </ul>
+              <span className="chip">{list.length} agents</span>
+            </div>
+            <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {list.map((a) => {
+                const u = usage.find((x) => x.agent_id === a.id);
+                const r = readiness(a);
+                return (
+                  <li key={a.id}>
+                    <Link href={`/agents/${a.id}`} className="card glow-border lift flex h-full flex-col p-5" data-agent={a.id}>
+                      <div className="flex items-start gap-3">
+                        <AgentIcon icon={a.icon} accent={a.accent} />
+                        <div className="min-w-0 flex-1">
+                          <h3 className="font-semibold">{a.name}</h3>
+                          <p className="text-xs text-muted">{a.role}</p>
+                        </div>
+                        <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${r.ready ? "border-mint/30 bg-mint/10 text-mint" : "border-warning/30 bg-warning/10 text-warning"}`}>{r.ready ? (a.partner ? "Partner" : "Runs now") : "Needs setup"}</span>
+                      </div>
+                      <p className="mt-3 flex-1 text-sm text-muted">{a.tagline}</p>
+                      <div className="mt-4"><WorkflowMini steps={a.steps} accent={a.accent} /></div>
+                      <p className="mt-3 text-xs text-muted">{a.steps.length} steps{u ? ` · ${u.missions} missions${u.live_products ? ` · ${u.live_products} live products` : ""}` : ""}{a.repeat ? " · recurring" : ""}</p>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        );
+      })}
 
       <section aria-labelledby="inv">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">

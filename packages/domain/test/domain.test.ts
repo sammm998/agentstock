@@ -5,7 +5,9 @@ import {
   checkReservation,
   getTool,
   missionSchema,
-  planMission,
+  AGENTS,
+  planWorkflow,
+  validateAgentInputs,
   canOnPlatform,
   canRemoveMember,
   extractMentions,
@@ -89,15 +91,33 @@ describe("sparks", () => {
 });
 
 describe("agent foundation", () => {
-  it("plans missions with valid dependencies and known tools", () => {
-    for (const [kind, externalChannel] of [["start_business", false], ["sell_existing", true]] as const) {
-      const plan = planMission(kind, { externalChannel });
-      const keys = new Set(plan.map((t) => t.key));
+  it("declares at least 20 agents with valid, acyclic workflows and known tools", () => {
+    expect(AGENTS.length).toBeGreaterThanOrEqual(20);
+    expect(new Set(AGENTS.map((a) => a.id)).size).toBe(AGENTS.length);
+    for (const agent of AGENTS) {
+      const plan = planWorkflow(agent.id, { externalChannel: "on" });
+      if (agent.partner) {
+        expect(plan).toHaveLength(0);
+        expect(agent.steps.length).toBeGreaterThan(0);
+        continue;
+      }
+      expect(plan.length, agent.id).toBeGreaterThan(0);
+      const seen = new Set<string>();
       for (const t of plan) {
-        expect(getTool(t.toolId), t.toolId).toBeDefined();
-        for (const d of t.dependsOn) expect(keys.has(d)).toBe(true);
+        expect(getTool(t.toolId), `${agent.id}:${t.toolId}`).toBeDefined();
+        for (const d of t.dependsOn) expect(seen.has(d), `${agent.id}:${t.key} depends on later ${d}`).toBe(true);
+        seen.add(t.key);
+        expect(t.explain.length).toBeGreaterThan(10);
       }
     }
+  });
+
+  it("drops conditional steps and validates agent inputs", () => {
+    expect(planWorkflow("ecompro").some((t) => t.key === "external")).toBe(false);
+    expect(planWorkflow("ecompro", { externalChannel: "on" }).some((t) => t.key === "external")).toBe(true);
+    const drop = AGENTS.find((a) => a.id === "dropforge")!;
+    expect(validateAgentInputs(drop, { niche: "Fitness", candidates: "" })).toHaveProperty("error");
+    expect(validateAgentInputs(drop, { niche: "Fitness", candidates: "Mat | 5 | 20 | 7", ownershipConfirmed: "on" })).toEqual({ params: { niche: "Fitness", candidates: "Mat | 5 | 20 | 7" } });
   });
 
   it("enforces the task state machine", () => {

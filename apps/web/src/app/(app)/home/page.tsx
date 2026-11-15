@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { ArrowRight, Bot, Check, CircleDollarSign, Users } from "lucide-react";
-import { AGENT_REGISTRY, OPPORTUNITY_TEMPLATES, STATUS_LABEL, formatCents } from "@hustera/domain";
+import { AGENTS, agentDisplayName, OPPORTUNITY_TEMPLATES, STATUS_LABEL, formatCents } from "@hustera/domain";
 import { requireViewer } from "@/server/session";
 import { homeFeed } from "@/server/social";
 import { q } from "@/server/db";
@@ -11,6 +11,7 @@ import { Composer, PostCard } from "@/components/post";
 import { Avatar, EmptyState } from "@/components/ui";
 import { AgentIcon, HeroArt, HusteraCardVisual, SparksCoin, compactNumber } from "@/components/visuals";
 import { OpportunityIcon } from "@/components/opportunity";
+import { WorkflowMini } from "@/components/workflow-diagram";
 
 export const metadata: Metadata = { title: "Home" };
 
@@ -46,7 +47,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
       [viewer.id],
     ),
   ]);
-  const featuredAgents = AGENT_REGISTRY.filter((a) => a.featured);
+  const featuredAgents = AGENTS.filter((a) => a.featured).slice(0, 8);
   const featuredOps = OPPORTUNITY_TEMPLATES.filter((o) => o.featured);
   const usageOf = (id: string) => usage.find((u) => u.agent_id === id);
   const joinedOf = (id: string) => joined.find((j) => j.template_id === id)?.missions ?? 0;
@@ -103,13 +104,10 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
                       <p className="text-xs leading-tight text-muted">{a.role}</p>
                     </div>
                   </div>
-                  <p className="mt-3 line-clamp-3 flex-1 text-sm text-muted">{a.summary}</p>
+                  <p className="mt-3 line-clamp-3 flex-1 text-sm text-muted">{a.tagline}</p>
+                  <div className="mt-3"><WorkflowMini steps={a.steps} accent={a.accent} max={6} /></div>
                   <p className="mt-3 text-xs text-muted">{u ? `${u.missions} ${u.missions === 1 ? "mission" : "missions"} · ${u.live_products} live` : "No missions yet"}</p>
-                  {a.launch ? (
-                    <Link href={`/agents/${a.id}`} className="btn-primary btn-sm mt-3 w-full">Use Agent</Link>
-                  ) : (
-                    <span className="btn-secondary btn-sm mt-3 w-full cursor-default opacity-70">Coming soon</span>
-                  )}
+                  <Link href={`/agents/${a.id}`} className="btn-primary btn-sm mt-3 w-full">Use Agent</Link>
                 </li>
               );
             })}
@@ -136,7 +134,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
                   </div>
                   <span className="mt-3 w-fit rounded-md bg-mint/10 px-2 py-0.5 text-xs font-medium text-mint">{o.badge}</span>
                   <p className="mt-3 text-xs text-muted">Agents</p>
-                  <p className="text-sm font-medium">{o.agents.map((id) => AGENT_REGISTRY.find((a) => a.id === id)?.name).filter(Boolean).join(" + ") || "You + the community"}</p>
+                  <p className="text-sm font-medium">{o.agents.map((id) => agentDisplayName(id)).filter(Boolean).join(" + ") || "You + the community"}</p>
                   <div className="mt-4 flex flex-1 items-end justify-between gap-2">
                     <span className="text-xs text-muted">{count ? `${compactNumber(count)} joined` : "Be the first"}</span>
                     {o.launch ? (

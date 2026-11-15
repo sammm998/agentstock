@@ -1,5 +1,5 @@
 import { useId } from "react";
-import { Bot, ChartLine, Globe, Landmark, MessageSquare, Palette, Play, Search, ShoppingBag, TrendingUp, type LucideIcon } from "lucide-react";
+import { BookOpen, Bitcoin, Bot, Briefcase, Camera, ChartLine, Compass, Globe, Landmark, LayoutTemplate, Link2, Mail, Megaphone, MessageSquare, Palette, Play, Radar, ScanSearch, Search, Shirt, ShoppingBag, Sunrise, TrendingUp, Truck, Vault, Video, type LucideIcon } from "lucide-react";
 import { LogoMark } from "./brand";
 
 /** Night-sky landscape for the home hero: planet, peaks and a lone explorer. Original SVG artwork. */
@@ -103,6 +103,22 @@ const AGENT_ICONS: Record<string, LucideIcon> = {
   chat: MessageSquare,
   ledger: Landmark,
   chart: ChartLine,
+  truck: Truck,
+  shirt: Shirt,
+  radar: Radar,
+  layout: LayoutTemplate,
+  video: Video,
+  link: Link2,
+  mail: Mail,
+  megaphone: Megaphone,
+  bitcoin: Bitcoin,
+  vault: Vault,
+  briefcase: Briefcase,
+  lens: ScanSearch,
+  sun: Sunrise,
+  book: BookOpen,
+  camera: Camera,
+  compass: Compass,
 };
 
 export function AgentIcon({ icon, accent, size = 44 }: { icon: string; accent: string; size?: number }) {

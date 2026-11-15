@@ -17,7 +17,7 @@ export default async function ProjectsPage() {
       <PageHeader
         title="Projects"
         description="Missions run by Hustera Core and its agents — within your budget, your approvals and your stop button."
-        actions={<Link href="/projects/new" className="btn-primary"><Plus size={16} aria-hidden="true" /> New mission</Link>}
+        actions={<Link href="/agents" className="btn-primary"><Plus size={16} aria-hidden="true" /> New mission</Link>}
       />
       {missions.length ? (
         <ul className="grid gap-4 md:grid-cols-2">
@@ -40,7 +40,7 @@ export default async function ProjectsPage() {
           ))}
         </ul>
       ) : (
-        <EmptyState icon={<FolderKanban size={26} />} title="No missions yet" action={<Link href="/projects/new" className="btn-primary">Start a mission</Link>}>
+        <EmptyState icon={<FolderKanban size={26} />} title="No missions yet" action={<Link href="/agents" className="btn-primary">Start a mission</Link>}>
           Tell Hustera Core about an idea or a product you already sell. Agents will draft a research plan, an offer, a launch checklist and a listing for your review.
         </EmptyState>
       )}

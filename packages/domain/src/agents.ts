@@ -12,7 +12,7 @@ export type CapabilityStatus = "READY" | "CONNECT_REQUIRED" | "APPROVAL_REQUIRED
 
 // ---------------------------------------------------------------- tools
 
-export type ToolProvider = "sandbox" | "composio" | "hustera" | "llm" | "instant" | "stripe";
+export type ToolProvider = "sandbox" | "composio" | "hustera" | "llm" | "instant" | "stripe" | "markets" | "partner";
 
 export interface ToolDefinition {
   id: string;
@@ -53,6 +53,36 @@ export const TOOL_REGISTRY: readonly ToolDefinition[] = [
   { id: "hustera.rights_qa", version: 1, provider: "hustera", name: "Rights & quality review", description: "You confirm the generated content is accurate, original enough to sell, and free of third-party rights issues.", maxCostCents: 0, requiresApproval: true, status: "READY", simulated: false },
   { id: "hustera.publish_to_store", version: 1, provider: "hustera", name: "Publish to your Hustera store", description: "Creates the product in your Hustera storefront. Digital products with delivery content go live; others are saved as drafts for you to finish.", maxCostCents: 0, requiresApproval: true, status: "READY", simulated: false },
   { id: "composio.publish_listing", version: 1, provider: "composio", name: "Publish to external channel", description: "Publishes the approved listing to an external store (e.g. Shopify) through your Composio connection.", maxCostCents: 0, requiresApproval: true, status: "CONNECT_REQUIRED", simulated: false },
+  { id: "drop.product_scout", version: 1, provider: "hustera", name: "Product scout", description: "Scores product candidates on margin after fees and shipping, delivery time and demand signals.", maxCostCents: 5, requiresApproval: false, status: "READY", simulated: false },
+  { id: "drop.supplier_checklist", version: 1, provider: "sandbox", name: "Supplier checklist", description: "Supplier, delivery, returns and EU product-safety checklist for the chosen product.", maxCostCents: 5, requiresApproval: false, status: "READY", simulated: true },
+  { id: "social.campaign_plan", version: 1, provider: "hustera", name: "Social campaign plan", description: "Plans seven posts with hooks, angles and hashtags (AI when available).", maxCostCents: 10, requiresApproval: false, status: "READY", simulated: false },
+  { id: "social.schedule_posts", version: 1, provider: "hustera", name: "Schedule posts", description: "Schedules the approved posts; they publish automatically at the planned times.", maxCostCents: 0, requiresApproval: true, status: "READY", simulated: false },
+  { id: "pod.design_concepts", version: 1, provider: "hustera", name: "Design concepts", description: "Original design concepts with slogans and artwork prompts.", maxCostCents: 10, requiresApproval: false, status: "READY", simulated: false },
+  { id: "price.watch_products", version: 1, provider: "instant", name: "Price watch", description: "Checks competitor prices for each of your live products.", maxCostCents: 20, requiresApproval: false, status: "READY", simulated: false },
+  { id: "pages.generate", version: 1, provider: "hustera", name: "Landing page draft", description: "Writes a landing page for one of your products.", maxCostCents: 10, requiresApproval: false, status: "READY", simulated: false },
+  { id: "pages.publish", version: 1, provider: "hustera", name: "Publish landing page", description: "Publishes the landing page at its own address.", maxCostCents: 0, requiresApproval: true, status: "READY", simulated: false },
+  { id: "yt.ideas", version: 1, provider: "hustera", name: "Video ideas", description: "Ten video ideas ranked by search intent.", maxCostCents: 10, requiresApproval: false, status: "READY", simulated: false },
+  { id: "yt.scripts", version: 1, provider: "hustera", name: "Scripts & metadata", description: "Scripts, titles, descriptions and tags.", maxCostCents: 30, requiresApproval: false, status: "READY", simulated: false },
+  { id: "yt.thumbnails", version: 1, provider: "hustera", name: "Thumbnail concepts", description: "Thumbnail concepts and image prompts.", maxCostCents: 5, requiresApproval: false, status: "READY", simulated: false },
+  { id: "yt.publish_plan", version: 1, provider: "hustera", name: "Upload schedule", description: "A weekly upload calendar.", maxCostCents: 0, requiresApproval: false, status: "READY", simulated: false },
+  { id: "aff.keyword_plan", version: 1, provider: "hustera", name: "Affiliate keyword plan", description: "Buyer-intent keywords for the niche.", maxCostCents: 5, requiresApproval: false, status: "READY", simulated: false },
+  { id: "aff.create_links", version: 1, provider: "hustera", name: "Tracked links", description: "Creates tracked short links with disclosure.", maxCostCents: 0, requiresApproval: false, status: "READY", simulated: false },
+  { id: "aff.articles", version: 1, provider: "hustera", name: "Affiliate articles", description: "Review and comparison articles with links and disclosure.", maxCostCents: 30, requiresApproval: false, status: "READY", simulated: false },
+  { id: "aff.report", version: 1, provider: "hustera", name: "Click report", description: "Clicks per link and per day.", maxCostCents: 0, requiresApproval: false, status: "READY", simulated: false },
+  { id: "seo.keyword_map", version: 1, provider: "hustera", name: "Keyword map", description: "Groups keywords by search intent.", maxCostCents: 5, requiresApproval: false, status: "READY", simulated: false },
+  { id: "seo.briefs", version: 1, provider: "hustera", name: "Content briefs", description: "Briefs for the best keyword opportunities.", maxCostCents: 20, requiresApproval: false, status: "READY", simulated: false },
+  { id: "seo.onpage_checklist", version: 1, provider: "sandbox", name: "On-page checklist", description: "On-page SEO checklist.", maxCostCents: 0, requiresApproval: false, status: "READY", simulated: true },
+  { id: "mail.sequence", version: 1, provider: "hustera", name: "Email sequence", description: "Five emails with subjects and timing.", maxCostCents: 20, requiresApproval: false, status: "READY", simulated: false },
+  { id: "mail.consent_checklist", version: 1, provider: "sandbox", name: "Consent checklist", description: "Consent, unsubscribe and sender checklist.", maxCostCents: 0, requiresApproval: false, status: "READY", simulated: true },
+  { id: "ads.angles", version: 1, provider: "hustera", name: "Ad angles", description: "Pain, desire, proof and offer angles.", maxCostCents: 10, requiresApproval: false, status: "READY", simulated: false },
+  { id: "ads.copy", version: 1, provider: "hustera", name: "Ad copy", description: "Copy variants per platform.", maxCostCents: 20, requiresApproval: false, status: "READY", simulated: false },
+  { id: "markets.prices", version: 1, provider: "markets", name: "Market prices", description: "Price history from public market data.", maxCostCents: 1, requiresApproval: false, status: "READY", simulated: false },
+  { id: "markets.analyze", version: 1, provider: "markets", name: "Market analysis", description: "SMA, RSI and volatility with an AI note.", maxCostCents: 10, requiresApproval: false, status: "READY", simulated: false },
+  { id: "markets.trade", version: 1, provider: "markets", name: "Paper trading", description: "Rule-based trades in a simulated portfolio.", maxCostCents: 0, requiresApproval: false, status: "READY", simulated: true },
+  { id: "gigs.demand_scan", version: 1, provider: "hustera", name: "Demand scan", description: "Marketplace demand by category.", maxCostCents: 0, requiresApproval: false, status: "READY", simulated: false },
+  { id: "gigs.service_draft", version: 1, provider: "hustera", name: "Service draft", description: "Drafts a service offer.", maxCostCents: 10, requiresApproval: false, status: "READY", simulated: false },
+  { id: "gigs.publish_service", version: 1, provider: "hustera", name: "Publish service", description: "Publishes the service to the marketplace.", maxCostCents: 0, requiresApproval: true, status: "READY", simulated: false },
+  { id: "partner.handoff", version: 1, provider: "partner", name: "Partner hand-off", description: "Runs in the partner product.", maxCostCents: 0, requiresApproval: false, status: "READY", simulated: false },
   /** Deprecated: replaced by hustera.publish_to_store and composio.publish_listing. Kept for existing missions. */
   { id: "channel.publish_listing", version: 1, provider: "composio", name: "Publish listing (legacy)", description: "Publishes an approved listing to a connected store or marketplace.", maxCostCents: 0, requiresApproval: true, status: "CONNECT_REQUIRED", simulated: false },
 ];
@@ -63,69 +93,18 @@ export function getTool(id: string): ToolDefinition | undefined {
 
 // ---------------------------------------------------------------- missions & planning
 
-export type MissionKind = "start_business" | "sell_existing" | "promote_product" | "market_watch" | "revenue_report";
+/** Missions store the agent id as their kind; older missions use the legacy kinds below. */
+export type MissionKind = string;
 export type MissionMode = "approve_each" | "autonomous";
 export type MissionStatus = "active" | "paused" | "blocked" | "completed" | "stopped";
 
-export const MISSION_KIND_LABEL: Record<MissionKind, string> = {
+export const MISSION_KIND_LABEL: Record<string, string> = {
   start_business: "Start a business for me",
   sell_existing: "Sell my existing product",
   promote_product: "Promote one of my products",
-  market_watch: "Market snapshot (information only)",
+  market_watch: "Market snapshot",
   revenue_report: "Revenue report",
 };
-
-export interface PlannedTask {
-  key: string;
-  agentId: string;
-  toolId: string;
-  title: string;
-  dependsOn: string[];
-}
-
-/**
- * Hustera Core's deterministic planner. It selects a small, fixed sequence of
- * tools per mission kind; LLM-based planning is a later capability.
- */
-export function planMission(kind: MissionKind, opts: { externalChannel?: boolean } = {}): PlannedTask[] {
-  if (kind === "promote_product") {
-    return [
-      { key: "promo", agentId: "contentflow", toolId: "sandbox.promo_drafts", title: "Draft promotion posts", dependsOn: [] },
-      { key: "post", agentId: "contentflow", toolId: "hustera.promote_post", title: "Post to your followers", dependsOn: ["promo"] },
-    ];
-  }
-  if (kind === "revenue_report") {
-    return [{ key: "report", agentId: "finance", toolId: "stripe.revenue_report", title: "Build the revenue report", dependsOn: [] }];
-  }
-  if (kind === "market_watch") {
-    return [{ key: "snapshot", agentId: "markets", toolId: "instant.market_snapshot", title: "Fetch a market snapshot", dependsOn: [] }];
-  }
-  const plan: PlannedTask[] = [
-    { key: "research", agentId: "research", toolId: "instant.market_research", title: kind === "start_business" ? "Research demand and feasibility" : "Research audience and competitors", dependsOn: [] },
-    { key: "seo", agentId: "seo", toolId: "instant.keyword_research", title: "Find search keywords", dependsOn: ["research"] },
-    { key: "prices", agentId: "ecompro", toolId: "instant.competitor_prices", title: "Check competitor prices", dependsOn: ["research"] },
-    { key: "offer", agentId: "core", toolId: "sandbox.offer_outline", title: kind === "start_business" ? "Outline a first offer to test" : "Evaluate offer and unit economics", dependsOn: ["research", "prices"] },
-  ];
-  const publishDeps = ["listing", "checklist"];
-  if (kind === "start_business") {
-    plan.push(
-      { key: "generate", agentId: "designstudio", toolId: "ai.generate_product", title: "Create the digital product", dependsOn: ["offer"] },
-      { key: "cover", agentId: "designstudio", toolId: "instant.cover_image", title: "Create a cover image", dependsOn: ["generate"] },
-      { key: "rights", agentId: "core", toolId: "hustera.rights_qa", title: "Review rights and quality", dependsOn: ["generate", "cover"] },
-    );
-    publishDeps.push("rights");
-  }
-  plan.push(
-    { key: "checklist", agentId: "core", toolId: "sandbox.compliance_checklist", title: "Prepare launch checklist", dependsOn: ["offer"] },
-    { key: "listing", agentId: "ecompro", toolId: "sandbox.listing_draft", title: "Write the product listing", dependsOn: ["offer", "seo"] },
-    { key: "publish", agentId: "ecompro", toolId: "hustera.publish_to_store", title: "Publish to your Hustera store", dependsOn: publishDeps },
-    { key: "paylink", agentId: "ecompro", toolId: "stripe.payment_link", title: "Create a Stripe payment link", dependsOn: ["publish"] },
-    { key: "promo", agentId: "contentflow", toolId: "sandbox.promo_drafts", title: "Draft promotion posts", dependsOn: ["publish", "paylink"] },
-    { key: "post", agentId: "contentflow", toolId: "hustera.promote_post", title: "Announce it to your followers", dependsOn: ["promo"] },
-  );
-  if (opts.externalChannel) plan.push({ key: "external", agentId: "ecompro", toolId: "composio.publish_listing", title: "Publish to your external store", dependsOn: ["publish"] });
-  return plan;
-}
 
 // ---------------------------------------------------------------- task state machine
 

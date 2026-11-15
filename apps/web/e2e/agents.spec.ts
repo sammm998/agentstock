@@ -4,18 +4,15 @@ import { signUp, uniq } from "./helpers";
 test("mission drafts a listing, waits for a store, then publishes a draft product", async ({ page }) => {
   const handle = uniq("founder");
   await signUp(page, { handle });
-  await page.goto("/projects/new");
-  await page.getByLabel(/Sell my existing product/).check();
-  await page.getByLabel("Mission name").fill("Study planners");
-  await page.getByLabel("Brief").fill("Printable weekly planners for university students");
-  await page.getByLabel(/Autonomous drafts/).check();
-  await page.getByLabel(/I own it or am authorised/).check();
-  await page.getByRole("button", { name: "Create mission" }).click();
+  await page.goto("/agents/ecompro");
+  await page.getByLabel("Product name").fill("Study planners");
+  await page.getByLabel("Describe the product for buyers").fill("Printable weekly planners for university students");
+  await page.getByLabel(/I own this product/).check();
+  await page.getByRole("button", { name: "Start EcomPro" }).click();
   await expect(page).toHaveURL(/\/projects\/[0-9a-f-]+$/);
   const missionUrl = page.url();
 
   await page.getByRole("button", { name: "Run agents" }).click();
-  await expect(page.getByText("Research plan — Study planners")).toBeVisible();
   const tasks = page.getByRole("region", { name: "Tasks" });
   const listing = tasks.locator("li", { hasText: "Write the product listing" });
   await listing.getByRole("button", { name: "Approve" }).click();
@@ -60,7 +57,7 @@ test("EcomPro takes a product live, announces it, and a sale shows in the missio
 
   await page.getByRole("button", { name: "Run agents" }).click();
   const tasks = page.getByRole("region", { name: "Tasks" });
-  for (const name of ["Write the product listing", "Publish to your Hustera store", "Announce it to your followers"]) {
+  for (const name of ["Write the product listing", "Publish to your Hustera store", "Announce to your followers"]) {
     const row = tasks.locator("li", { hasText: name });
     await row.getByRole("button", { name: "Approve" }).click();
     await expect(row.getByText("Done")).toBeVisible();

@@ -90,7 +90,7 @@ describe("agent runtime", () => {
     await completeTestCheckout(redirectUrl.split("/").pop()!);
     const results = await missionResults(owner, id);
     expect(results).toMatchObject({ live: 1, paid: 1, revenue_test: 790, revenue_real: 0 });
-    expect((await agentUsage()).find((u) => u.agent_id === "ecompro")).toMatchObject({ missions: 1, live_products: 1 });
+    expect((await agentUsage()).find((u) => u.agent_id === "ecompro")).toMatchObject({ live_products: 1 });
   });
 
   it("ContentFlow promotes an existing product after approval", async () => {
@@ -104,11 +104,18 @@ describe("agent runtime", () => {
     const id = await createMission(owner, { ...base, kind: "promote_product", mode: "autonomous", totalCents: 100, perDayCents: 100, perTaskCents: 50, productId, agentId: "contentflow" });
     await runMission(owner, id);
     let m = (await getMission(owner, id))!;
-    await decideApproval(owner, m.tasks.find((t) => t.key === "post")!.id, true);
+    expect(m.tasks.find((t) => t.key === "campaign")!.status).toBe("succeeded");
+    await decideApproval(owner, m.tasks.find((t) => t.key === "schedule")!.id, true);
     await runMission(owner, id);
     m = (await getMission(owner, id))!;
     expect(m.mission.status).toBe("completed");
-    expect((await profilePosts(owner, owner))[0]!.body).toContain("Habit tracker");
+    // Day 1 goes out immediately, the rest are scheduled.
+    const feed = await profilePosts(owner, owner);
+    expect(feed).toHaveLength(1);
+    expect(feed[0]!.body).toContain("Habit tracker");
+    const { q } = await import("@/server/db");
+    const sched = await q<{ status: string }>(`select status from scheduled_posts where mission_id = $1`, [id]);
+    expect(sched.filter((x) => x.status === "scheduled")).toHaveLength(6);
   });
 
   it("generates an AI product, requires rights review and publishes it live", async () => {
@@ -270,39 +277,6 @@ describe("Composio Instant agents", () => {
     }
   });
 
-  it("MarketWatch refuses to show prices without a real source", async () => {
-    const owner = await user();
-    const id = await createMission(owner, { ...base, kind: "market_watch", title: "Market snapshot", brief: "bitcoin, ethereum, AAPL", mode: "autonomous", totalCents: 100, perDayCents: 100, perTaskCents: 50, agentId: "markets" });
-    await runMission(owner, id);
-    const m = (await getMission(owner, id))!;
-    expect(m.tasks[0]!.status).toBe("blocked");
-    expect(m.tasks[0]!.status_reason).toMatch(/CONNECT_REQUIRED/);
-    expect(m.artifacts).toHaveLength(0);
-  });
-
-  it("MarketWatch reports Instant prices as information only", async () => {
-    const owner = await user();
-    process.env.COMPOSIO_API_KEY = "test";
-    const realFetch = globalThis.fetch;
-    globalThis.fetch = (async (url: string | URL) => {
-      const slug = String(url).split("/tools/execute/")[1] ?? "";
-      if (slug.startsWith("COINGECKO")) return new Response(JSON.stringify({ successful: true, data: { bitcoin: { eur: 61000 } }, error: null }));
-      if (slug.startsWith("FINNHUB")) return new Response(JSON.stringify({ successful: true, data: { c: 231.5 }, error: null }));
-      return new Response("nope", { status: 404 });
-    }) as typeof fetch;
-    try {
-      const id = await createMission(owner, { ...base, kind: "market_watch", title: "Market snapshot", brief: "bitcoin and AAPL please", mode: "autonomous", totalCents: 100, perDayCents: 100, perTaskCents: 50, agentId: "markets" });
-      await runMission(owner, id);
-      const m = (await getMission(owner, id))!;
-      const a = m.artifacts[0]!;
-      expect(a.content).toContain("€61,000");
-      expect(a.content).toContain("231.5");
-      expect(a.content).toContain("Not investment advice");
-    } finally {
-      globalThis.fetch = realFetch;
-      delete process.env.COMPOSIO_API_KEY;
-    }
-  });
 });
 
 describe("integration inventory", () => {

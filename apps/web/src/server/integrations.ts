@@ -49,8 +49,8 @@ export async function getInventory(opts: { fetchImpl?: typeof fetch; apiKey?: st
   }
 
   const llm = llmConfig();
-  const PROVIDER_LABEL = { sandbox: "Hustera sandbox", hustera: "Hustera", llm: llm.provider ? `AI model (${llm.provider})` : "AI model", composio: "Composio", instant: "Composio Instant", stripe: "Stripe" } as const;
-  const capabilities: CapabilityRow[] = TOOL_REGISTRY.filter((t) => t.id !== "channel.publish_listing").map((t) => {
+  const PROVIDER_LABEL = { sandbox: "Hustera sandbox", hustera: "Hustera", llm: llm.provider ? `AI model (${llm.provider})` : "AI model", composio: "Composio", instant: "Composio Instant", stripe: "Stripe", markets: "Public market data", partner: "Scoutr partner" } as const;
+  const capabilities: CapabilityRow[] = TOOL_REGISTRY.filter((t) => t.id !== "channel.publish_listing" && t.id !== "partner.handoff").map((t) => {
     let status: CapabilityStatus;
     if (t.provider === "llm") status = llm.provider ? "READY" : "CONNECT_REQUIRED";
     else if (t.provider === "composio") status = "CONNECT_REQUIRED";

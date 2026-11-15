@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { ArrowLeft, Zap } from "lucide-react";
-import { AGENT_REGISTRY, INSTANT_CATALOG, INSTANT_CAPABILITIES, canOnPlatform } from "@hustera/domain";
+import { agentDisplayName, INSTANT_CATALOG, INSTANT_CAPABILITIES, canOnPlatform } from "@hustera/domain";
 import { getViewer } from "@/server/session";
 import { instantConfigured, instantOverrides, instantToolStatus } from "@/server/instant";
 import { discoverInstantAction } from "@/app/actions";
@@ -15,7 +15,7 @@ export default async function InstantPage() {
   const configured = instantConfigured();
   const overrides = instantOverrides();
   const categories = [...new Set(INSTANT_CATALOG.map((t) => t.category))];
-  const agentName = (id: string) => AGENT_REGISTRY.find((a) => a.id === id)?.name ?? id;
+  const agentName = (id: string) => agentDisplayName(id);
 
   return (
     <div className="space-y-6">

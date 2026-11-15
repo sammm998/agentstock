@@ -5,3 +5,6 @@ export * from "./status";
 export * from "./agents";
 export * from "./commerce";
 export * from "./instant";
+export * from "./workflows";
+export * from "./affiliate";
+export * from "./trading";

@@ -8,6 +8,7 @@ import {
   OPPORTUNITY_TEMPLATES,
   canOnPlatform,
   getAgent,
+  validateAgentInputs,
   channelSchema,
   costSchema,
   emailSchema,
@@ -408,28 +409,37 @@ export async function createMissionAction(fd: FormData): Promise<ActionState> {
   let missionId = "";
   const r = await run(async () => {
     const viewer = await requireViewer();
-    const euros = (k: string) => Math.round(Number(str(fd, k) || "0") * 100);
+    const agent = getAgent(str(fd, "agentId") || str(fd, "kind"));
+    if (!agent || agent.partner) throw new UserError("Choose an agent to start");
+    const raw: Record<string, string> = {};
+    for (const [k, v] of fd.entries()) if (typeof v === "string") raw[k] = v;
+    const checked = validateAgentInputs(agent, raw);
+    if ("error" in checked) throw new UserError(checked.error);
+    const params = checked.params;
+    const euros = (k: string) => Math.round(Number((str(fd, k) || "0").replace(",", ".")) * 100);
+    const label = params.niche ?? params.watchlist ?? params.topic ?? params.audience ?? "";
+    const title = str(fd, "title") || (label ? `${agent.name}: ${label}` : agent.name).slice(0, 80);
+    const brief = str(fd, "brief") || `${agent.tagline}${label ? ` — ${label}` : ""}`;
     const input = parse(missionSchema, {
-      kind: str(fd, "kind"),
-      title: str(fd, "title"),
-      brief: str(fd, "brief"),
-      region: str(fd, "region"),
+      kind: agent.id,
+      title,
+      brief: brief.length >= 10 ? brief : `${brief} — ${agent.role}`,
+      region: str(fd, "region") || "Sweden",
       mode: str(fd, "mode") || "approve_each",
       totalCents: euros("total"),
       perDayCents: euros("perDay"),
       perTaskCents: euros("perTask"),
-      ownershipConfirmed: fd.get("ownershipConfirmed") === "on",
+      ownershipConfirmed: fd.get("ownershipConfirmed") === "on" || !agent.inputs.some((f) => f.name === "ownershipConfirmed"),
       priceCents: euros("price") || 900,
       externalChannel: fd.get("externalChannel") === "on",
       productKind: str(fd, "productKind") || "digital",
       deliveryContent: str(fd, "deliveryContent"),
       productId: str(fd, "productId") || null,
     });
-    const agentId = getAgent(str(fd, "agentId"))?.id ?? null;
     const templateId = OPPORTUNITY_TEMPLATES.find((t) => t.id === str(fd, "templateId"))?.id ?? null;
     const repeat = Number(str(fd, "repeatHours"));
-    const repeatHours = repeat === 24 || repeat === 168 ? repeat : null;
-    missionId = await agents.createMission(viewer.id, { ...input, agentId, templateId, repeatHours });
+    const repeatHours = agent.repeat?.includes(repeat) ? repeat : null;
+    missionId = await agents.createMission(viewer.id, { ...input, agentId: agent.id, templateId, repeatHours, params });
   });
   if (r?.error) return r;
   redirect(`/projects/${missionId}`);
@@ -747,7 +757,7 @@ export async function missionRepeatAction(fd: FormData): Promise<ActionState> {
   return run(async () => {
     const viewer = await requireViewer();
     const repeat = Number(str(fd, "repeatHours"));
-    await agents.setMissionRepeat(viewer.id, id(fd, "missionId"), repeat === 24 || repeat === 168 ? repeat : null);
+    await agents.setMissionRepeat(viewer.id, id(fd, "missionId"), repeat > 0 ? repeat : null);
     return "Schedule updated";
   });
 }

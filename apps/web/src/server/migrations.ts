@@ -618,4 +618,105 @@ alter table missions add column repeat_hours int check (repeat_hours is null or 
 alter table missions add column next_run_at timestamptz;
 `,
   },
+  {
+    id: "008_agent_network",
+    sql: /* sql */ `
+-- Missions now store the agent id as their kind; validated in code against the agent registry.
+alter table missions drop constraint missions_kind_check;
+alter table missions add column params jsonb not null default '{}'::jsonb;
+
+alter table notifications drop constraint notifications_kind_check;
+alter table notifications add constraint notifications_kind_check check (kind in ('follow','follow_request','like','comment','mention','repost','space_invite','dm','moderation','sparks','order','contract','agent','trade'));
+
+create table scheduled_posts (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null references users(id) on delete cascade,
+  mission_id uuid references missions(id) on delete set null,
+  body text not null check (char_length(body) between 1 and 1000),
+  channel text not null default 'hustera' check (channel in ('hustera','tiktok','instagram','x','youtube')),
+  publish_at timestamptz not null,
+  status text not null default 'scheduled' check (status in ('scheduled','published','skipped','cancelled')),
+  post_id uuid references posts(id) on delete set null,
+  note text not null default '',
+  created_at timestamptz not null default now()
+);
+create index scheduled_posts_due_idx on scheduled_posts (status, publish_at);
+
+create table landing_pages (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null references users(id) on delete cascade,
+  product_id uuid not null references products(id) on delete cascade,
+  mission_id uuid references missions(id) on delete set null,
+  slug text not null unique check (slug ~ '^[a-z0-9-]{3,60}$'),
+  content jsonb not null,
+  status text not null default 'draft' check (status in ('draft','published')),
+  views int not null default 0,
+  created_at timestamptz not null default now()
+);
+
+create table affiliate_links (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null references users(id) on delete cascade,
+  mission_id uuid references missions(id) on delete set null,
+  network text not null,
+  niche text not null,
+  name text not null,
+  destination text not null check (destination ~ '^https://'),
+  slug text not null unique check (slug ~ '^[a-z0-9-]{4,40}$'),
+  disclosure text not null,
+  created_at timestamptz not null default now()
+);
+
+create table affiliate_clicks (
+  id bigint generated always as identity primary key,
+  link_id uuid not null references affiliate_links(id) on delete cascade,
+  referrer text,
+  created_at timestamptz not null default now()
+);
+create index affiliate_clicks_link_idx on affiliate_clicks (link_id, created_at);
+
+-- Paper portfolios: simulated money only. Real execution is disabled until licensed.
+create table paper_portfolios (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null references users(id) on delete cascade,
+  mission_id uuid unique references missions(id) on delete cascade,
+  name text not null,
+  asset_class text not null check (asset_class in ('crypto','stocks')),
+  cash_cents bigint not null,
+  start_cents bigint not null,
+  is_public boolean not null default false,
+  last_value_cents bigint,
+  created_at timestamptz not null default now()
+);
+
+create table paper_positions (
+  portfolio_id uuid not null references paper_portfolios(id) on delete cascade,
+  symbol text not null,
+  qty double precision not null,
+  avg_price double precision not null,
+  last_price double precision,
+  primary key (portfolio_id, symbol)
+);
+
+create table paper_trades (
+  id bigint generated always as identity primary key,
+  portfolio_id uuid not null references paper_portfolios(id) on delete cascade,
+  symbol text not null,
+  side text not null check (side in ('buy','sell')),
+  qty double precision not null,
+  price double precision not null,
+  reason text not null,
+  ai_note text,
+  created_at timestamptz not null default now()
+);
+create index paper_trades_portfolio_idx on paper_trades (portfolio_id, id desc);
+
+create table partner_activations (
+  id bigint generated always as identity primary key,
+  user_id uuid references users(id) on delete set null,
+  agent_id text not null,
+  created_at timestamptz not null default now()
+);
+`,
+  },
 ];

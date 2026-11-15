@@ -1,25 +1,11 @@
-import { q } from "@/server/db";
-import { runMission, startDueRecurringMissions } from "@/server/agents";
+import { runBackgroundWork } from "@/server/worker";
 
 /**
- * Background worker entry point. Advances active autonomous missions. Call it
- * from a scheduler (e.g. Vercel Cron or Trigger.dev) with
- * `Authorization: Bearer $CRON_SECRET`.
+ * Background worker entry point for external schedulers
+ * (`Authorization: Bearer $CRON_SECRET`). The server also runs it in-process; see instrumentation.ts.
  */
 export async function POST(req: Request) {
   const secret = process.env.CRON_SECRET;
   if (!secret || req.headers.get("authorization") !== `Bearer ${secret}`) return new Response("Unauthorized", { status: 401 });
-  const restarted = await startDueRecurringMissions();
-  const missions = await q<{ id: string; owner_id: string }>(
-    `select id, owner_id from missions where status = 'active' and mode = 'autonomous' order by updated_at asc limit 25`,
-  );
-  const results: Record<string, string> = {};
-  for (const m of missions) {
-    try {
-      results[m.id] = await runMission(m.owner_id, m.id, 10);
-    } catch (e) {
-      results[m.id] = e instanceof Error ? `error: ${e.message}` : "error";
-    }
-  }
-  return Response.json({ restarted: restarted.length, processed: missions.length, results });
+  return Response.json(await runBackgroundWork());
 }

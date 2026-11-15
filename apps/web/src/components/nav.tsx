@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  Activity,
   BookOpen,
   Bot,
   Briefcase,
@@ -34,6 +35,7 @@ const PRIMARY_NAV: NavItem[] = [
   { href: "/home", label: "Home", icon: Home },
   { href: "/communities", label: "Community", icon: Users },
   { href: "/agents", label: "AI Agents", icon: Bot },
+  { href: "/live", label: "Control room", icon: Activity },
   { href: "/opportunities", label: "Opportunities", icon: Lightbulb },
   { href: "/marketplace", label: "Marketplace", icon: Store },
   { href: "/projects", label: "Projects", icon: FolderKanban },
@@ -73,7 +75,7 @@ export function SideNav({ unreadMessages = 0, moderator = false, group = "primar
               href={item.href}
               aria-current={active ? "page" : undefined}
               className={`flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
-                active ? "bg-indigo/20 text-cloud shadow-[inset_0_0_0_1px_rgb(101_88_245/0.45)]" : "text-muted hover:bg-slate-2 hover:text-cloud"
+                active ? "bg-white/20 text-white shadow-[inset_0_1px_0_0_rgb(255_255_255/0.25)]" : "text-cloud/80 hover:bg-white/10 hover:text-white"
               }`}
             >
               <Icon size={18} strokeWidth={1.8} aria-hidden="true" />
@@ -126,6 +128,63 @@ export function MobileNav({ unreadMessages }: { unreadMessages: number }) {
                 {item.label}
                 {item.href === "/messages" && unreadMessages > 0 && <span className="absolute right-[30%] top-1.5 h-2 w-2 rounded-full bg-mint" aria-label={`${unreadMessages} unread`} />}
               </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
+  );
+}
+
+interface DockApp {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+  from: string;
+  to: string;
+  mobile?: boolean;
+}
+
+const DOCK: (DockApp | "sep")[] = [
+  { href: "/home", label: "Home", icon: Home, from: "#5ac8fa", to: "#007aff", mobile: true },
+  { href: "/communities", label: "Community", icon: Users, from: "#ffcc4d", to: "#ff9500" },
+  { href: "/agents", label: "AI Agents", icon: Bot, from: "#a78bfa", to: "#6558f5", mobile: true },
+  { href: "/live", label: "Control room", icon: Activity, from: "#4ef2c2", to: "#0a9f7a", mobile: true },
+  { href: "/opportunities", label: "Opportunities", icon: Lightbulb, from: "#ffe066", to: "#f5a623" },
+  { href: "/marketplace", label: "Marketplace", icon: Store, from: "#ff8a8a", to: "#ff3b5c" },
+  { href: "/projects", label: "Projects", icon: FolderKanban, from: "#7dd3fc", to: "#2563eb", mobile: true },
+  { href: "/wallet", label: "Wallet", icon: Wallet, from: "#34d399", to: "#047857", mobile: true },
+  { href: "/card", label: "Hustera Card", icon: CreditCard, from: "#3b3b4f", to: "#0f0f1a" },
+  { href: "/learn", label: "Learn", icon: BookOpen, from: "#fb923c", to: "#ea580c" },
+  { href: "/events", label: "Events", icon: CalendarDays, from: "#f87171", to: "#dc2626" },
+  "sep",
+  { href: "/messages", label: "Messages", icon: MessageCircle, from: "#6ee76e", to: "#22a722" },
+  { href: "/store", label: "My store", icon: Briefcase, from: "#c4b5fd", to: "#7c3aed" },
+  { href: "/rewards", label: "Sparks", icon: Sparkles, from: "#fde68a", to: "#d97706" },
+  { href: "/settings", label: "Settings", icon: Settings, from: "#9ca3af", to: "#4b5563" },
+  { href: "/menu", label: "More", icon: Menu, from: "#9ca3af", to: "#4b5563", mobile: true },
+];
+
+/** macOS-style dock: the main way around the signed-in app on every screen size. */
+export function Dock({ unreadMessages = 0 }: { unreadMessages?: number }) {
+  const pathname = usePathname();
+  return (
+    <nav aria-label="Dock" className="fixed inset-x-0 bottom-2 z-40 flex justify-center px-2 pb-[env(safe-area-inset-bottom)] sm:bottom-3">
+      <ul className="glass-panel flex items-end gap-1.5 rounded-[22px] px-2 pb-2 pt-2 sm:gap-2 sm:px-3">
+        {DOCK.map((app, i) => {
+          if (app === "sep") return <li key={`sep-${i}`} aria-hidden="true" className="mx-1 hidden h-10 w-px self-center bg-white/25 lg:block" />;
+          const active = isActive(pathname, app.href);
+          const Icon = app.icon;
+          return (
+            <li key={app.href} className={`dock-item relative ${app.mobile ? "" : "hidden lg:block"} ${app.href === "/menu" ? "lg:hidden" : ""}`}>
+              <Link href={app.href} aria-current={active ? "page" : undefined} aria-label={app.label} className="block">
+                <span className="app-icon flex size-11 items-center justify-center rounded-[12px] text-white sm:size-12 sm:rounded-[13px]" style={{ background: `linear-gradient(160deg, ${app.from}, ${app.to})` }}>
+                  <Icon size={22} strokeWidth={2} aria-hidden="true" />
+                </span>
+                {app.href === "/messages" && unreadMessages > 0 && <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-[#ff3b30] px-1 text-center text-[11px] font-bold leading-5 text-white">{unreadMessages}</span>}
+              </Link>
+              <span className="dock-tip pointer-events-none absolute -top-9 left-1/2 hidden whitespace-nowrap rounded-md bg-black/60 px-2 py-1 text-xs text-white backdrop-blur lg:block">{app.label}</span>
+              <span aria-hidden="true" className={`absolute -bottom-1.5 left-1/2 size-1 -translate-x-1/2 rounded-full bg-white/90 ${active ? "" : "opacity-0"}`} />
             </li>
           );
         })}

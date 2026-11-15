@@ -2,7 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { ArrowLeft, Bot, CheckCircle2, Circle, CircleAlert, Clock, OctagonX, Pause, Play, RotateCcw, User } from "lucide-react";
-import { MISSION_KIND_LABEL, formatCents, getAgent, getTool, type TaskStatus } from "@hustera/domain";
+import { MISSION_KIND_LABEL, agentDisplayName, formatCents, getAgent, getTool, planWorkflow, type TaskStatus } from "@hustera/domain";
+import { AutoRefresh } from "@/components/live";
+import { WorkflowDiagram, type StepState } from "@/components/workflow-diagram";
 import { requireViewer } from "@/server/session";
 import { getMission, missionResults } from "@/server/agents";
 import { isUuid } from "@/server/core";
@@ -36,6 +38,12 @@ export default async function MissionPage({ params }: { params: Promise<{ id: st
   const pct = budget.total_cents ? Math.min(100, Math.round((spend.committedCents / budget.total_cents) * 100)) : 0;
   const artifactByTask = new Map(artifacts.filter((a) => a.task_id).map((a) => [a.task_id!, a]));
   const hidden = (name: string, value: string) => <input type="hidden" name={name} value={value} />;
+  const agent = getAgent(mission.kind);
+  const repeatOptions = agent?.repeat ?? (["revenue_report", "market_watch"].includes(mission.kind) ? [24, 168] : []);
+  const every = (h: number) => (h === 1 ? "hour" : h === 24 ? "day" : h === 168 ? "week" : `${h} hours`);
+  const states = Object.fromEntries(tasks.map((t) => [t.key, t.status as StepState]));
+  const flow = agent ? planWorkflow(agent.id, { ...(mission.params ?? {}), externalChannel: mission.external_channel ? "on" : "" }).filter((s) => tasks.some((t) => t.key === s.key)) : [];
+  const working = mission.status === "active" && mission.mode === "autonomous" && tasks.some((t) => t.status === "queued" || t.status === "running") && !tasks.some((t) => t.status === "awaiting_approval");
 
   return (
     <div className="space-y-6">
@@ -49,7 +57,7 @@ export default async function MissionPage({ params }: { params: Promise<{ id: st
               <MissionStatusBadge status={mission.status} />
               <Illustrative>Test mode</Illustrative>
             </div>
-            <p className="mt-1 text-sm text-muted">{MISSION_KIND_LABEL[mission.kind]} · {mission.region} · {mission.mode === "autonomous" ? "Autonomous drafts" : "Approve each step"}</p>
+            <p className="mt-1 text-sm text-muted">{agent ? agent.name : (MISSION_KIND_LABEL[mission.kind] ?? agentDisplayName(mission.kind))} · {mission.region} · {mission.mode === "autonomous" ? "Autonomous drafts" : "Approve each step"}</p>
             {mission.status_reason && <p className="mt-2 text-sm text-warning">{mission.status_reason}</p>}
             {halted && <p className="mt-2 text-sm text-danger">All agents are currently paused by Hustera administrators.</p>}
           </div>
@@ -82,6 +90,14 @@ export default async function MissionPage({ params }: { params: Promise<{ id: st
         </details>
       </header>
 
+      {working && <AutoRefresh seconds={3} />}
+      {agent && flow.length > 0 && (
+        <details className="card p-6" open={mission.status === "active"}>
+          <summary className="cursor-pointer font-semibold">Live workflow · {tasks.filter((t) => t.status === "succeeded").length}/{tasks.length} steps done</summary>
+          <div className="mt-5"><WorkflowDiagram steps={flow} accent={agent.accent} states={states} /></div>
+        </details>
+      )}
+
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
         <section aria-labelledby="tasks-h" className="space-y-3">
           <h2 id="tasks-h" className="eyebrow">Tasks</h2>
@@ -100,7 +116,7 @@ export default async function MissionPage({ params }: { params: Promise<{ id: st
                         <TaskStatusText status={t.status} />
                       </div>
                       <p className="text-xs text-muted">
-                        Agent: {getAgent(t.agent_id)?.name ?? (t.agent_id === "core" ? "Hustera Core" : t.agent_id)} · Tool: {tool?.name ?? t.tool_id} v{t.tool_version} · up to {tool?.maxCostCents ?? 0}¢{tool?.simulated ? " (simulated)" : ""}
+                        Agent: {agentDisplayName(t.agent_id)} · Tool: {tool?.name ?? t.tool_id} v{t.tool_version} · up to {tool?.maxCostCents ?? 0}¢{tool?.simulated ? " (simulated)" : ""}
                       </p>
                       {t.status_reason && <p className="mt-2 text-sm text-warning">{t.status_reason}</p>}
                       {t.status === "awaiting_approval" && (
@@ -133,13 +149,13 @@ export default async function MissionPage({ params }: { params: Promise<{ id: st
         </section>
 
         <aside className="space-y-6">
-          {(mission.kind === "revenue_report" || mission.kind === "market_watch") && (
+          {repeatOptions.length > 0 && (
             <section className="card p-5" aria-labelledby="sched-h">
               <h2 id="sched-h" className="font-semibold">Schedule</h2>
-              <p className="mt-1 text-sm text-muted">{mission.repeat_hours ? <>Runs every {mission.repeat_hours === 24 ? "day" : "week"}{mission.next_run_at ? <> · next <TimeAgo date={mission.next_run_at} /></> : null}</> : "Runs once"}</p>
+              <p className="mt-1 text-sm text-muted">{mission.repeat_hours ? <>Runs every {every(mission.repeat_hours)}{mission.next_run_at ? <> · next <TimeAgo date={mission.next_run_at} /></> : null}</> : "Runs once"}</p>
               <ActionForm action={missionRepeatAction} showOk className="mt-3 flex gap-2">
                 <input type="hidden" name="missionId" value={mission.id} />
-                <select name="repeatHours" defaultValue={mission.repeat_hours ?? ""} aria-label="Schedule" className="input"><option value="">Run once</option><option value="24">Every day</option><option value="168">Every week</option></select>
+                <select name="repeatHours" defaultValue={mission.repeat_hours ?? ""} aria-label="Schedule" className="input"><option value="">Run once</option>{repeatOptions.map((h) => <option key={h} value={h}>Every {every(h)}</option>)}</select>
                 <button className="btn-secondary btn-sm">Save</button>
               </ActionForm>
             </section>

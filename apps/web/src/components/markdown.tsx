@@ -12,6 +12,7 @@ export function Markdown({ source }: { source: string }) {
   return (
     <div className="space-y-3 text-sm leading-relaxed">
       {blocks.map((block, i) => {
+        if (block.trim().startsWith("<!--")) return null;
         const lines = block.split("\n");
         const first = lines[0] ?? "";
         if (first.startsWith("# ")) return <h3 key={i} className="text-lg font-bold">{first.slice(2)}</h3>;

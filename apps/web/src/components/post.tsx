@@ -4,6 +4,7 @@ import { REPORT_REASONS, POST_MAX } from "@hustera/domain";
 import type { PostView } from "@/server/social";
 import { createPostAction, deletePostAction, likeAction, reportAction, repostAction, saveAction } from "@/app/actions";
 import { ActionForm } from "./action-form";
+import { Popover } from "./popover";
 import { Avatar, KindChip, RichText, TimeAgo } from "./ui";
 
 const REASON_LABEL: Record<string, string> = {
@@ -19,12 +20,14 @@ const REASON_LABEL: Record<string, string> = {
 
 export function ReportMenu({ targetType, targetId, label = "Report" }: { targetType: string; targetId: string; label?: string }) {
   return (
-    <details className="group relative">
-      <summary className="btn-ghost btn-sm cursor-pointer list-none" aria-label={label}>
-        <Flag size={15} aria-hidden="true" />
-        <span className="sr-only sm:not-sr-only">{label}</span>
-      </summary>
-      <div className="card absolute right-0 z-20 mt-2 w-72 p-4">
+    <Popover
+      summary={
+        <summary className="btn-ghost btn-sm cursor-pointer list-none" aria-label={label}>
+          <Flag size={15} aria-hidden="true" />
+          <span className="sr-only sm:not-sr-only">{label}</span>
+        </summary>
+      }
+    >
         <ActionForm action={reportAction} showOk reset className="space-y-3">
           <input type="hidden" name="targetType" value={targetType} />
           <input type="hidden" name="targetId" value={targetId} />
@@ -43,8 +46,7 @@ export function ReportMenu({ targetType, targetId, label = "Report" }: { targetT
           <textarea name="details" maxLength={1000} rows={2} placeholder="Add details (optional)" className="input" aria-label="Details" />
           <button className="btn-primary btn-sm w-full">Send report</button>
         </ActionForm>
-      </div>
-    </details>
+    </Popover>
   );
 }
 

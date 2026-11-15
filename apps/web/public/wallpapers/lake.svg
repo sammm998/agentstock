@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0b2a5b"/>
+      <stop offset="0.45" stop-color="#1f5fa8"/>
+      <stop offset="0.62" stop-color="#5aa0d8"/>
+    </linearGradient>
+    <linearGradient id="lake" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1f7fa8"/>
+      <stop offset="0.35" stop-color="#14869a"/>
+      <stop offset="1" stop-color="#06303f"/>
+    </linearGradient>
+    <linearGradient id="far" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e9f2fb"/>
+      <stop offset="0.35" stop-color="#9fb8d3"/>
+      <stop offset="1" stop-color="#47607d"/>
+    </linearGradient>
+    <linearGradient id="near" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#6d7f94"/>
+      <stop offset="1" stop-color="#28374a"/>
+    </linearGradient>
+    <radialGradient id="sun" cx="0.72" cy="0.18" r="0.5">
+      <stop offset="0" stop-color="#bfe3ff" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#bfe3ff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="rock" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#a7b0b8"/>
+      <stop offset="1" stop-color="#3a4550"/>
+    </linearGradient>
+    <filter id="soft"><feGaussianBlur stdDeviation="2"/></filter>
+  </defs>
+  <rect width="1600" height="1000" fill="url(#sky)"/>
+  <rect width="1600" height="1000" fill="url(#sun)"/>
+  <path d="M0 520 L90 470 L170 488 L260 440 L340 470 L420 430 L520 465 L600 425 L700 455 L790 410 L880 450 L960 420 L1060 452 L1150 415 L1240 448 L1330 420 L1420 455 L1510 430 L1600 460 L1600 560 L0 560Z" fill="url(#far)"/>
+  <path d="M260 440 L300 458 L280 470 L240 455Z M600 425 L640 445 L615 452Z M790 410 L835 436 L805 444 L770 430Z M1150 415 L1190 436 L1160 442Z" fill="#ffffff" opacity="0.85"/>
+  <path d="M0 560 L120 520 L230 545 L330 515 L460 548 L560 525 L700 552 L840 530 L960 556 L1100 528 L1230 550 L1360 522 L1480 548 L1600 530 L1600 580 L0 580Z" fill="url(#near)" opacity="0.9"/>
+  <rect y="575" width="1600" height="425" fill="url(#lake)"/>
+  <g opacity="0.18" stroke="#e8f7ff" stroke-width="2">
+    <path d="M100 640 H380 M520 660 H900 M1100 630 H1450 M60 720 H300 M700 740 H1100 M1250 780 H1560 M200 850 H600 M900 880 H1300"/>
+  </g>
+  <g filter="url(#soft)">
+    <ellipse cx="1180" cy="640" rx="190" ry="70" fill="url(#rock)"/>
+    <ellipse cx="1020" cy="660" rx="120" ry="48" fill="url(#rock)"/>
+    <ellipse cx="1380" cy="650" rx="110" ry="40" fill="url(#rock)"/>
+    <ellipse cx="420" cy="760" rx="210" ry="80" fill="url(#rock)"/>
+    <ellipse cx="760" cy="710" rx="110" ry="44" fill="url(#rock)"/>
+    <ellipse cx="1400" cy="900" rx="320" ry="140" fill="url(#rock)"/>
+    <ellipse cx="150" cy="660" rx="80" ry="22" fill="url(#rock)"/>
+  </g>
+  <rect width="1600" height="1000" fill="#04122a" opacity="0.18"/>
+</svg>

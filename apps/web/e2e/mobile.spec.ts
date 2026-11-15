@@ -3,7 +3,7 @@ import { signUp, uniq } from "./helpers";
 
 test("mobile layout uses bottom navigation and has no horizontal overflow", async ({ page }) => {
   await signUp(page, { handle: uniq("mobile") });
-  const nav = page.getByRole("navigation", { name: "Primary" });
+  const nav = page.getByRole("navigation", { name: "Dock" });
   await expect(nav.getByRole("link", { name: "Home" })).toBeVisible();
   await nav.getByRole("link", { name: "More" }).click();
   await expect(page).toHaveURL(/\/menu/);

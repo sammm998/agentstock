@@ -133,7 +133,7 @@ export function extractMentions(text: string): string[] {
 
 export const missionSchema = z
   .object({
-    kind: z.enum(["start_business", "sell_existing", "promote_product", "market_watch", "revenue_report"]),
+    kind: z.string().trim().min(2).max(40),
     title: z.string().trim().min(3, "Give the mission a name").max(80),
     brief: z.string().trim().min(10, "Describe your idea or product in a sentence or two").max(2000),
     region: z.string().trim().min(2).max(60),
@@ -148,6 +148,6 @@ export const missionSchema = z
     deliveryContent: z.string().trim().max(5000).default(""),
     productId: z.string().uuid().nullable().default(null),
   })
-  .refine((m) => m.kind !== "promote_product" || m.productId, { message: "Choose a product to promote", path: ["productId"] })
-  .refine((m) => m.kind !== "sell_existing" || m.ownershipConfirmed, { message: "Confirm that you own or are authorised to sell this product", path: ["ownershipConfirmed"] })
+  .refine((m) => !["promote_product", "pagesmith", "contentflow", "mailmint", "adcraft"].includes(m.kind) || m.productId, { message: "Choose one of your products", path: ["productId"] })
+  .refine((m) => !["sell_existing", "ecompro", "dropforge"].includes(m.kind) || m.ownershipConfirmed, { message: "Confirm that you own or are authorised to sell this product", path: ["ownershipConfirmed"] })
   .refine((m) => m.perDayCents <= m.totalCents && m.perTaskCents <= m.perDayCents, { message: "Limits must satisfy per task ≤ per day ≤ total", path: ["perDayCents"] });

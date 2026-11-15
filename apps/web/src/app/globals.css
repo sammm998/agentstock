@@ -3,14 +3,14 @@
 /* Hustera design tokens. Values mirror docs/BRAND.md. */
 @theme {
   --color-midnight: #081020;
-  --color-slate: #111c31;
-  --color-slate-2: #17233b;
-  --color-slate-3: #1f2c47;
+  --color-slate: rgb(14 28 56 / 0.55);
+  --color-slate-2: rgb(255 255 255 / 0.09);
+  --color-slate-3: rgb(255 255 255 / 0.16);
   --color-indigo: #6558f5;
   --color-indigo-2: #7a6ff7;
   --color-mint: #4ef2c2;
   --color-cloud: #f7f9ff;
-  --color-muted: #8893ad;
+  --color-muted: #b3bfd6;
   --color-line: rgb(255 255 255 / 0.08);
   --color-danger: #ff6b81;
   --color-warning: #ffc861;
@@ -71,8 +71,11 @@ body {
 }
 
 @utility card {
-  @apply rounded-[20px] border border-white/[0.07] shadow-[var(--shadow-card)] backdrop-blur;
-  background: linear-gradient(180deg, rgb(23 35 59 / 0.78), rgb(13 21 38 / 0.78));
+  @apply rounded-[22px] border border-white/[0.14];
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.11), rgb(255 255 255 / 0.04)), rgb(12 22 44 / 0.5);
+  box-shadow: 0 1px 0 0 rgb(255 255 255 / 0.18) inset, 0 20px 50px -24px rgb(0 0 0 / 0.55);
+  backdrop-filter: blur(44px) saturate(1.7);
+  -webkit-backdrop-filter: blur(44px) saturate(1.7);
 }
 
 @utility btn {
@@ -84,11 +87,11 @@ body {
 }
 
 @utility btn-secondary {
-  @apply btn border border-line bg-slate-2 text-cloud hover:bg-slate-3;
+  @apply btn border border-white/15 bg-white/10 text-cloud backdrop-blur-md hover:bg-white/20;
 }
 
 @utility btn-ghost {
-  @apply btn text-muted hover:bg-slate-2 hover:text-cloud;
+  @apply btn text-cloud/75 hover:bg-white/10 hover:text-cloud;
 }
 
 @utility btn-danger {
@@ -100,7 +103,7 @@ body {
 }
 
 @utility input {
-  @apply w-full rounded-[var(--radius-control)] border border-line bg-midnight/60 px-3.5 py-2.5 text-sm text-cloud placeholder:text-muted/70 focus:border-indigo focus:outline-none;
+  @apply w-full rounded-[var(--radius-control)] border border-white/15 bg-black/25 px-3.5 py-2.5 text-sm text-cloud placeholder:text-muted/70 focus:border-indigo focus:outline-none;
 }
 
 @utility label {
@@ -108,7 +111,7 @@ body {
 }
 
 @utility chip {
-  @apply inline-flex items-center gap-1 rounded-full border border-line bg-slate-2 px-2.5 py-0.5 text-xs font-medium text-muted;
+  @apply inline-flex items-center gap-1 rounded-full border border-white/15 bg-white/10 px-2.5 py-0.5 text-xs font-medium text-muted;
 }
 
 @utility eyebrow {
@@ -216,3 +219,46 @@ body {
 }
 .page-in { animation: page-in 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
 @media (prefers-reduced-motion: reduce) { .page-in { animation: none; } }
+
+/* Workflow diagrams: data flowing along the edges */
+@keyframes flow-down { from { background-position: 0 0; } to { background-position: 0 24px; } }
+@keyframes flow-right { from { background-position: 0 0; } to { background-position: 24px 0; } }
+@keyframes node-glow { 0%, 100% { box-shadow: 0 0 0 0 var(--node, #6D5CFF); } 50% { box-shadow: 0 0 0 6px transparent; } }
+.wf-edge-v { background-image: linear-gradient(to bottom, var(--edge, #6D5CFF) 50%, transparent 50%); background-size: 2px 12px; animation: flow-down 1.2s linear infinite; }
+.wf-edge-h { background-image: linear-gradient(to right, var(--edge, #6D5CFF) 50%, transparent 50%); background-size: 12px 2px; animation: flow-right 1.2s linear infinite; }
+.wf-node-live { animation: node-glow 2s ease-out infinite; }
+@media (prefers-reduced-motion: reduce) { .wf-edge-v, .wf-edge-h, .wf-node-live { animation: none !important; } }
+
+/* ------------------------------------------------------------------ desktop (signed-in app) */
+.desktop { position: relative; isolation: isolate; }
+.desktop::before {
+  content: ""; position: fixed; inset: 0; z-index: -2;
+  background: url("/wallpapers/lake.svg") center / cover no-repeat, #0b2a5b;
+}
+.desktop::after {
+  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background: linear-gradient(180deg, rgb(4 14 34 / 0.25), rgb(4 14 34 / 0.05) 30%, rgb(4 14 34 / 0.35));
+}
+.desktop .text-muted { text-shadow: 0 1px 1px rgb(0 0 0 / 0.15); }
+.glass-bar {
+  background: rgb(10 24 52 / 0.38);
+  backdrop-filter: blur(30px) saturate(1.8);
+  -webkit-backdrop-filter: blur(30px) saturate(1.8);
+  border-bottom: 1px solid rgb(255 255 255 / 0.12);
+}
+.glass-panel {
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.12), rgb(255 255 255 / 0.05)), rgb(10 22 46 / 0.35);
+  border: 1px solid rgb(255 255 255 / 0.16);
+  box-shadow: 0 1px 0 0 rgb(255 255 255 / 0.22) inset, 0 30px 60px -30px rgb(0 0 0 / 0.6);
+  backdrop-filter: blur(34px) saturate(1.7);
+  -webkit-backdrop-filter: blur(34px) saturate(1.7);
+}
+.dock-item { transition: transform 0.22s cubic-bezier(0.2, 0.7, 0.2, 1); transform-origin: bottom center; }
+.dock-item:hover { transform: translateY(-10px) scale(1.28); }
+.dock-item:has(+ .dock-item:hover), .dock-item:hover + .dock-item { transform: translateY(-4px) scale(1.12); }
+.dock-tip { opacity: 0; transform: translate(-50%, 4px); transition: opacity 0.15s, transform 0.15s; }
+.dock-item:hover .dock-tip, .dock-item:focus-within .dock-tip { opacity: 1; transform: translate(-50%, 0); }
+.app-icon { box-shadow: 0 1px 0 0 rgb(255 255 255 / 0.45) inset, 0 6px 14px -6px rgb(0 0 0 / 0.6); }
+@media (prefers-reduced-motion: reduce) { .dock-item, .dock-item:hover { transform: none !important; } }
+/* Keep focused/scrolled-to content clear of the menu bar and dock. */
+html:has(.desktop) { scroll-padding-top: 64px; scroll-padding-bottom: 120px; }

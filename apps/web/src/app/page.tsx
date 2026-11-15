@@ -1,13 +1,14 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ArrowRight, Bot, Check, CreditCard, Sparkles, TrendingUp, Users, Zap } from "lucide-react";
-import { AGENT_REGISTRY, STATUS_LABEL } from "@hustera/domain";
+import { AGENTS, STATUS_LABEL } from "@hustera/domain";
 import { getViewer } from "@/server/session";
 import { agentActivity, platformStats } from "@/server/agents";
 import { LogoMark } from "@/components/brand";
 import { CountUp, Reveal, ScrollSteps, ScrollTilt, TiltCard } from "@/components/motion";
 import { AgentIcon } from "@/components/visuals";
 import { TimeAgo } from "@/components/ui";
+import { WorkflowMini } from "@/components/workflow-diagram";
 
 const NAV: [string, string][] = [
   ["Platform", "#platform"],
@@ -62,7 +63,7 @@ export default async function Landing({ searchParams }: { searchParams: Promise<
   if (await getViewer()) redirect("/home");
   const { deleted } = await searchParams;
   const [stats, activity] = await Promise.all([platformStats(), agentActivity(10)]);
-  const featured = AGENT_REGISTRY.filter((a) => a.launch || a.featured).slice(0, 6);
+  const featured = AGENTS.filter((a) => a.featured).slice(0, 6);
 
   return (
     <div className="relative min-h-dvh overflow-x-clip bg-midnight">
@@ -210,7 +211,8 @@ export default async function Landing({ searchParams }: { searchParams: Promise<
                       </div>
                       <span className={`ml-auto rounded-full px-2 py-0.5 text-[10px] font-semibold ${a.status === "VERIFIED" ? "bg-mint/15 text-mint" : "bg-warning/15 text-warning"}`}>{STATUS_LABEL[a.status]}</span>
                     </div>
-                    <p className="mt-4 flex-1 text-sm text-muted">{a.summary}</p>
+                    <p className="mt-4 flex-1 text-sm text-muted">{a.tagline}</p>
+                    <div className="mt-4"><WorkflowMini steps={a.steps} accent={a.accent} max={6} /></div>
                   </div>
                 </Reveal>
               ))}

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { CheckCircle2 } from "lucide-react";
-import { AGENT_REGISTRY, OPPORTUNITY_TEMPLATES } from "@hustera/domain";
+import { agentDisplayName, OPPORTUNITY_TEMPLATES } from "@hustera/domain";
 import { templateUsage } from "@/server/agents";
 import { OpportunityIcon } from "@/components/opportunity";
 import { PageHeader, StatusBadge } from "@/components/ui";
@@ -35,7 +35,7 @@ export default async function OpportunitiesPage() {
                   <li key={r} className="flex items-start gap-2 text-sm"><CheckCircle2 size={15} className="mt-0.5 shrink-0 text-mint" aria-hidden="true" />{r}</li>
                 ))}
               </ul>
-              {o.agents.length > 0 && <p className="mt-4 text-xs text-muted">Agents: {o.agents.map((id) => AGENT_REGISTRY.find((a) => a.id === id)?.name).join(" + ")}</p>}
+              {o.agents.length > 0 && <p className="mt-4 text-xs text-muted">Agents: {o.agents.map((id) => agentDisplayName(id)).join(" + ")}</p>}
               <div className="mt-4 flex flex-1 items-end justify-between gap-2">
                 <span className="text-xs text-muted">{joined ? `${compactNumber(joined)} joined` : "Be the first"}</span>
                 {o.id === "freelance" ? (

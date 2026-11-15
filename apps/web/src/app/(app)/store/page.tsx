@@ -92,7 +92,7 @@ export default async function StorePage() {
                 ))}
               </ul>
             ) : (
-              <p className="mt-2 text-sm text-muted">No products yet. Add one above, or let a <Link href="/projects/new" className="underline">mission</Link> prepare one for you.</p>
+              <p className="mt-2 text-sm text-muted">No products yet. Add one above, or let a <Link href="/agents" className="underline">mission</Link> prepare one for you.</p>
             )}
           </section>
 
