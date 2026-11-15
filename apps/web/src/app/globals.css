@@ -72,10 +72,10 @@ body {
 
 @utility card {
   @apply rounded-[22px] border border-white/[0.14];
-  background: linear-gradient(180deg, rgb(255 255 255 / 0.11), rgb(255 255 255 / 0.04)), rgb(12 22 44 / 0.5);
-  box-shadow: 0 1px 0 0 rgb(255 255 255 / 0.18) inset, 0 20px 50px -24px rgb(0 0 0 / 0.55);
-  backdrop-filter: blur(44px) saturate(1.7);
-  -webkit-backdrop-filter: blur(44px) saturate(1.7);
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.11), rgb(255 255 255 / 0.03)), rgb(10 14 30 / 0.78);
+  box-shadow: 0 1px 0 0 rgb(255 255 255 / 0.14) inset, 0 20px 50px -24px rgb(0 0 0 / 0.7);
+  backdrop-filter: blur(30px) saturate(1.4);
+  -webkit-backdrop-filter: blur(30px) saturate(1.4);
 }
 
 @utility btn {
@@ -232,22 +232,24 @@ body {
 /* ------------------------------------------------------------------ desktop (signed-in app) */
 .desktop { position: relative; isolation: isolate; }
 .desktop::before {
-  content: ""; position: fixed; inset: 0; z-index: -2;
-  background: url("/wallpapers/lake.svg") center / cover no-repeat, #0b2a5b;
+  content: ""; position: fixed; inset: 0; z-index: -3;
+  background:
+    radial-gradient(1000px 600px at 15% -10%, rgb(101 88 245 / 0.18), transparent 60%),
+    radial-gradient(800px 500px at 100% 100%, rgb(78 242 194 / 0.07), transparent 60%),
+    #04060d;
 }
 .desktop::after {
   content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
-  background: linear-gradient(180deg, rgb(4 14 34 / 0.25), rgb(4 14 34 / 0.05) 30%, rgb(4 14 34 / 0.35));
+  background: radial-gradient(ellipse at center, transparent 40%, rgb(2 3 8 / 0.55));
 }
-.desktop .text-muted { text-shadow: 0 1px 1px rgb(0 0 0 / 0.15); }
 .glass-bar {
-  background: rgb(10 24 52 / 0.38);
+  background: rgb(6 9 20 / 0.75);
   backdrop-filter: blur(30px) saturate(1.8);
   -webkit-backdrop-filter: blur(30px) saturate(1.8);
   border-bottom: 1px solid rgb(255 255 255 / 0.12);
 }
 .glass-panel {
-  background: linear-gradient(180deg, rgb(255 255 255 / 0.12), rgb(255 255 255 / 0.05)), rgb(10 22 46 / 0.35);
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.08), rgb(255 255 255 / 0.03)), rgb(8 12 26 / 0.78);
   border: 1px solid rgb(255 255 255 / 0.16);
   box-shadow: 0 1px 0 0 rgb(255 255 255 / 0.22) inset, 0 30px 60px -30px rgb(0 0 0 / 0.6);
   backdrop-filter: blur(34px) saturate(1.7);
@@ -262,3 +264,20 @@ body {
 @media (prefers-reduced-motion: reduce) { .dock-item, .dock-item:hover { transform: none !important; } }
 /* Keep focused/scrolled-to content clear of the menu bar and dock. */
 html:has(.desktop) { scroll-padding-top: 64px; scroll-padding-bottom: 120px; }
+
+/* Outline icon tile in the Hustera theme (as on the start page). */
+.icon-tile {
+  position: relative;
+  display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+  background: linear-gradient(160deg, rgb(255 255 255 / 0.07), rgb(255 255 255 / 0.02)), rgb(8 12 26 / 0.7);
+  border: 1px solid rgb(255 255 255 / 0.12);
+  box-shadow: 0 1px 0 0 rgb(255 255 255 / 0.08) inset, 0 8px 20px -10px rgb(0 0 0 / 0.8);
+}
+.icon-tile::before {
+  content: ""; position: absolute; inset: -1px; border-radius: inherit; padding: 1px; pointer-events: none;
+  background: linear-gradient(140deg, rgb(143 124 255 / 0.7), rgb(78 242 194 / 0.1) 45%, rgb(78 242 194 / 0.6));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude; opacity: 0.6; transition: opacity 0.2s;
+}
+.dock-item:hover .icon-tile::before, .icon-tile[data-active="true"]::before { opacity: 1; }
+.icon-tile[data-active="true"] { box-shadow: 0 0 0 1px rgb(78 242 194 / 0.25), 0 0 24px -4px rgb(78 242 194 / 0.45); }

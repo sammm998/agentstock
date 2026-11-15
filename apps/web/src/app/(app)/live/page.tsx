@@ -30,7 +30,7 @@ export default async function LivePage() {
           const Icon = s.icon;
           return (
             <li key={s.label} className="card p-4">
-              <span className="app-icon mb-3 inline-flex size-9 items-center justify-center rounded-xl text-white" style={{ background: s.color }}><Icon size={18} aria-hidden="true" /></span>
+              <span className="icon-tile mb-3 size-9 rounded-xl" style={{ color: s.color }}><Icon size={18} strokeWidth={1.7} aria-hidden="true" /></span>
               <p className="text-xl font-bold tabular-nums">{s.value}</p>
               <p className="text-xs text-muted">{s.label}</p>
             </li>

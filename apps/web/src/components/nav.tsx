@@ -178,13 +178,13 @@ export function Dock({ unreadMessages = 0 }: { unreadMessages?: number }) {
           return (
             <li key={app.href} className={`dock-item relative ${app.mobile ? "" : "hidden lg:block"} ${app.href === "/menu" ? "lg:hidden" : ""}`}>
               <Link href={app.href} aria-current={active ? "page" : undefined} aria-label={app.label} className="block">
-                <span className="app-icon flex size-11 items-center justify-center rounded-[12px] text-white sm:size-12 sm:rounded-[13px]" style={{ background: `linear-gradient(160deg, ${app.from}, ${app.to})` }}>
-                  <Icon size={22} strokeWidth={2} aria-hidden="true" />
+                <span data-active={active} className={`icon-tile size-11 rounded-[13px] sm:size-12 ${active ? "text-mint" : "text-cloud/85"}`}>
+                  <Icon size={21} strokeWidth={1.7} aria-hidden="true" />
                 </span>
-                {app.href === "/messages" && unreadMessages > 0 && <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-[#ff3b30] px-1 text-center text-[11px] font-bold leading-5 text-white">{unreadMessages}</span>}
+                {app.href === "/messages" && unreadMessages > 0 && <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-mint px-1 text-center text-[11px] font-bold leading-5 text-midnight">{unreadMessages}</span>}
               </Link>
               <span className="dock-tip pointer-events-none absolute -top-9 left-1/2 hidden whitespace-nowrap rounded-md bg-black/60 px-2 py-1 text-xs text-white backdrop-blur lg:block">{app.label}</span>
-              <span aria-hidden="true" className={`absolute -bottom-1.5 left-1/2 size-1 -translate-x-1/2 rounded-full bg-white/90 ${active ? "" : "opacity-0"}`} />
+              <span aria-hidden="true" className={`absolute -bottom-1.5 left-1/2 size-1 -translate-x-1/2 rounded-full bg-mint ${active ? "" : "opacity-0"}`} />
             </li>
           );
         })}

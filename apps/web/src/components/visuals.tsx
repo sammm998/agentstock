@@ -124,12 +124,8 @@ const AGENT_ICONS: Record<string, LucideIcon> = {
 export function AgentIcon({ icon, accent, size = 44 }: { icon: string; accent: string; size?: number }) {
   const Icon = AGENT_ICONS[icon] ?? Bot;
   return (
-    <span
-      className="inline-flex shrink-0 items-center justify-center rounded-xl text-white"
-      style={{ width: size, height: size, background: `linear-gradient(135deg, ${accent}, ${accent}aa)`, boxShadow: `0 6px 20px -6px ${accent}` }}
-      aria-hidden="true"
-    >
-      <Icon size={size * 0.5} strokeWidth={2} />
+    <span className="icon-tile rounded-xl" style={{ width: size, height: size, color: accent }} aria-hidden="true">
+      <Icon size={size * 0.48} strokeWidth={1.7} />
     </span>
   );
 }

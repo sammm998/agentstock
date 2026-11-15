@@ -13,7 +13,7 @@ const ICONS: Record<string, LucideIcon> = {
 export function OpportunityIcon({ icon, accent, size = 44 }: { icon: string; accent: string; size?: number }) {
   const Icon = ICONS[icon] ?? Box;
   return (
-    <span className="inline-flex shrink-0 items-center justify-center rounded-xl text-white" style={{ width: size, height: size, background: accent }} aria-hidden="true">
+    <span className="icon-tile rounded-xl" style={{ width: size, height: size, color: accent }} aria-hidden="true">
       <Icon size={size * 0.5} strokeWidth={2} />
     </span>
   );
