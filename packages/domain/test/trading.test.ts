@@ -40,3 +40,18 @@ describe("affiliate catalog", () => {
     expect(parseAffiliateLines("Desk | https://a.example/x\nBad | http://b\nno pipe")).toEqual([{ name: "Desk", url: "https://a.example/x" }]);
   });
 });
+
+import { AGENTS, AGENT_DETAILS, budgetBreakdown } from "../src";
+describe("agent details", () => {
+  it("documents every agent and breaks down its budget", () => {
+    for (const a of AGENTS) {
+      const d = AGENT_DETAILS[a.id];
+      expect(d, a.id).toBeDefined();
+      expect(d!.deliverables.length, a.id).toBeGreaterThan(0);
+      expect(d!.engine.length, a.id).toBeGreaterThan(0);
+    }
+    const b = budgetBreakdown("ecompro");
+    expect(b.lines.length).toBe(AGENTS.find((a) => a.id === "ecompro")!.steps.length);
+    expect(b.totalMaxCents).toBe(b.byKind.reduce((s, k) => s + k.cents, 0));
+  });
+});

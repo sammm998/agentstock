@@ -170,7 +170,7 @@ export function Dock({ unreadMessages = 0 }: { unreadMessages?: number }) {
   const pathname = usePathname();
   return (
     <nav aria-label="Dock" className="fixed inset-x-0 bottom-2 z-40 flex justify-center px-2 pb-[env(safe-area-inset-bottom)] sm:bottom-3">
-      <ul className="glass-panel flex items-end gap-1.5 rounded-[22px] px-2 pb-2 pt-2 sm:gap-2 sm:px-3">
+      <ul className="glass-panel dock-shelf flex items-end gap-1.5 rounded-[22px] px-2 pb-2.5 pt-2 sm:gap-2 sm:px-3">
         {DOCK.map((app, i) => {
           if (app === "sep") return <li key={`sep-${i}`} aria-hidden="true" className="mx-1 hidden h-10 w-px self-center bg-white/25 lg:block" />;
           const active = isActive(pathname, app.href);

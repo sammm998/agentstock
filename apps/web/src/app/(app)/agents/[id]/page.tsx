@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { ArrowLeft, ArrowUpRight, Check, ShieldCheck } from "lucide-react";
-import { AGENTS, INSTANT_CATALOG, OPPORTUNITY_TEMPLATES, agentDisplayName, getAgent } from "@hustera/domain";
+import { ArrowLeft, ArrowUpRight, Check, Cpu, Package, ShieldCheck, Target, Wallet } from "lucide-react";
+import { AGENTS, AGENT_DETAILS, INSTANT_CATALOG, OPPORTUNITY_TEMPLATES, agentDisplayName, getAgent } from "@hustera/domain";
 import { getViewer } from "@/server/session";
 import { myProducts } from "@/server/commerce";
 import { agentUsage, listMissions } from "@/server/agents";
@@ -11,6 +11,8 @@ import { AgentIcon } from "@/components/visuals";
 import { StatusBadge, TimeAgo } from "@/components/ui";
 import { WorkflowDiagram } from "@/components/workflow-diagram";
 import { AgentLaunchForm } from "@/components/agent-launch-form";
+import { AgentPreview } from "@/components/agent-preview";
+import { BudgetBreakdown } from "@/components/budget-breakdown";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   return { title: getAgent((await params).id)?.name ?? "Agent" };
@@ -36,6 +38,7 @@ export default async function AgentPage({ params, searchParams }: { params: Prom
   const needs = stepNeeds(agent);
   const helpers = [...new Set(agent.steps.map((s) => s.agentId).filter((a) => a !== agent.id))];
   const names = Object.fromEntries([agent.id, ...helpers].map((a) => [a, agentDisplayName(a)]));
+  const detail = AGENT_DETAILS[agent.id];
   const instantToolkits = INSTANT_CATALOG.filter((t) => t.usedBy.includes(agent.id));
 
   return (
@@ -44,6 +47,7 @@ export default async function AgentPage({ params, searchParams }: { params: Prom
         <Link href="/agents" className="btn-ghost btn-sm -ml-2"><ArrowLeft size={15} aria-hidden="true" /> AI Agents</Link>
         <header className="card glow-border relative overflow-hidden p-6">
           <div aria-hidden="true" className="pointer-events-none absolute -right-20 -top-20 size-64 rounded-full blur-3xl" style={{ background: `${agent.accent}33` }} />
+          {detail && <div className="relative mb-6 sm:float-right sm:mb-2 sm:ml-6 sm:w-[46%]"><AgentPreview kind={detail.preview} accent={agent.accent} className="window-3d" compact /></div>}
           <div className="relative flex items-start gap-4">
             <AgentIcon icon={agent.icon} accent={agent.accent} size={64} />
             <div className="min-w-0 flex-1">
@@ -62,13 +66,44 @@ export default async function AgentPage({ params, searchParams }: { params: Prom
             <span className="chip">{u ? `${u.missions} missions run` : "No missions yet"}</span>
           </div>
           {agent.needs && <p className="relative mt-4 text-sm text-warning">{agent.needs}</p>}
+          {detail && <p className="relative mt-4 flex gap-2 text-sm"><Target size={16} className="mt-0.5 shrink-0 text-mint" aria-hidden="true" /><span><span className="font-semibold">Ideal for: </span><span className="text-muted">{detail.idealFor}</span></span></p>}
+          <div className="clear-both" />
         </header>
+
+        {detail && (
+          <div className="grid gap-5 md:grid-cols-2">
+            <section className="card p-6" aria-labelledby="get-h">
+              <h2 id="get-h" className="flex items-center gap-2 text-lg font-semibold"><span className="icon-tile size-8 rounded-lg text-mint"><Package size={16} /></span> What you get</h2>
+              <ul className="mt-4 space-y-2.5 text-sm">{detail.deliverables.map((d) => <li key={d} className="flex gap-2.5"><Check size={16} className="mt-0.5 shrink-0 text-mint" aria-hidden="true" />{d}</li>)}</ul>
+            </section>
+            <section className="card p-6" aria-labelledby="engine-h">
+              <h2 id="engine-h" className="flex items-center gap-2 text-lg font-semibold"><span className="icon-tile size-8 rounded-lg text-[#b8b0ff]"><Cpu size={16} /></span> How it works under the hood</h2>
+              <ol className="mt-4 space-y-3 text-sm">{detail.engine.map((e, i) => <li key={e} className="flex gap-3"><span className="flex size-6 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/5 text-[11px] font-bold">{i + 1}</span><span className="text-muted">{e}</span></li>)}</ol>
+            </section>
+          </div>
+        )}
+
+        {detail && (
+          <section className="card p-6" aria-labelledby="preview-h">
+            <h2 id="preview-h" className="text-lg font-semibold">What it looks like</h2>
+            <p className="mb-5 mt-1 text-sm text-muted">An illustrated example of the output {agent.name} produces.</p>
+            <AgentPreview kind={detail.preview} accent={agent.accent} className="mx-auto max-w-2xl" />
+          </section>
+        )}
 
         <section className="card p-6" aria-labelledby="wf-h">
           <h2 id="wf-h" className="text-lg font-semibold">The workflow</h2>
           <p className="mb-6 mt-1 text-sm text-muted">{agent.partner ? `How ${agent.name} works once activated.` : "Exactly what happens, step by step. Steps with a shield wait for your approval; you watch every step live on the mission page."}</p>
           <WorkflowDiagram steps={agent.steps} accent={agent.accent} needs={needs} agentNames={names} />
         </section>
+
+        {detail && (
+          <section className="card p-6" aria-labelledby="budget-h">
+            <h2 id="budget-h" className="flex items-center gap-2 text-lg font-semibold"><span className="icon-tile size-8 rounded-lg text-mint"><Wallet size={16} /></span> Where your investment goes</h2>
+            <p className="mb-5 mt-1 text-sm text-muted">Every step, what it can cost at most and who gets paid. You set the hard limits when you start.</p>
+            <BudgetBreakdown agent={agent} external={detail.external} />
+          </section>
+        )}
 
         {agent.partner && (
           <section className="card p-6">

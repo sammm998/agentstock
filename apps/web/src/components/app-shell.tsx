@@ -10,7 +10,7 @@ import { LogoMark } from "./brand";
 import { Avatar } from "./ui";
 import { Dock, SideNav, SpaceLink } from "./nav";
 import { MenuClock } from "./menu-clock";
-import { LedBackground } from "./led-background";
+import { SpaceBackground } from "./space-background";
 
 const MENU = [
   { href: "/home", label: "Home" },
@@ -31,7 +31,7 @@ export async function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="desktop min-h-dvh">
-      <LedBackground />
+      <SpaceBackground />
       <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-indigo focus:px-4 focus:py-2">
         Skip to content
       </a>

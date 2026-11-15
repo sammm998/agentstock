@@ -8,3 +8,4 @@ export * from "./instant";
 export * from "./workflows";
 export * from "./affiliate";
 export * from "./trading";
+export * from "./agent-details";

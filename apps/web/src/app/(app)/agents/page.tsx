@@ -3,12 +3,14 @@ import type { Metadata } from "next";
 import { Activity, Plug } from "lucide-react";
 import { agentUsage } from "@/server/agents";
 import { AgentIcon } from "@/components/visuals";
-import { AGENTS, AGENT_CATEGORIES, type AgentCategory, type CapabilityStatus } from "@hustera/domain";
+import { AGENTS, AGENT_DETAILS, AGENT_CATEGORIES, type AgentCategory, type CapabilityStatus } from "@hustera/domain";
 import { getInventory } from "@/server/integrations";
 import { getViewer } from "@/server/session";
 import { readiness } from "@/server/agent-catalog";
 import { PageHeader } from "@/components/ui";
 import { WorkflowMini } from "@/components/workflow-diagram";
+import { AgentPreview } from "@/components/agent-preview";
+import { TiltCard } from "@/components/motion";
 
 export const metadata: Metadata = { title: "Agents" };
 
@@ -61,7 +63,14 @@ export default async function AgentsPage() {
                 const r = readiness(a);
                 return (
                   <li key={a.id}>
-                    <Link href={`/agents/${a.id}`} className="card glow-border lift flex h-full flex-col p-5" data-agent={a.id}>
+                    <TiltCard max={6} className="h-full">
+                    <Link href={`/agents/${a.id}`} className="card glow-border flex h-full flex-col overflow-hidden p-5" data-agent={a.id}>
+                      {AGENT_DETAILS[a.id] && (
+                        <div className="relative -mx-5 -mt-5 mb-4 h-36 overflow-hidden border-b border-white/5 px-4 pt-4" aria-hidden="true">
+                          <div className="preview-thumb"><AgentPreview kind={AGENT_DETAILS[a.id]!.preview} accent={a.accent} compact /></div>
+                          <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-[#090b1c] to-transparent" />
+                        </div>
+                      )}
                       <div className="flex items-start gap-3">
                         <AgentIcon icon={a.icon} accent={a.accent} />
                         <div className="min-w-0 flex-1">
@@ -74,6 +83,7 @@ export default async function AgentsPage() {
                       <div className="mt-4"><WorkflowMini steps={a.steps} accent={a.accent} /></div>
                       <p className="mt-3 text-xs text-muted">{a.steps.length} steps{u ? ` · ${u.missions} missions${u.live_products ? ` · ${u.live_products} live products` : ""}` : ""}{a.repeat ? " · recurring" : ""}</p>
                     </Link>
+                    </TiltCard>
                   </li>
                 );
               })}
