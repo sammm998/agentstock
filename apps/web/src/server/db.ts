@@ -1,5 +1,6 @@
 import "server-only";
 import path from "node:path";
+import { mkdir } from "node:fs/promises";
 import { MIGRATIONS } from "./migrations";
 
 export type Row = Record<string, unknown>;
@@ -41,10 +42,13 @@ async function createDb(): Promise<Db> {
   }
 
   const { PGlite } = await import("@electric-sql/pglite");
+  // On Railway, a mounted volume is exposed as RAILWAY_VOLUME_MOUNT_PATH; data there survives redeploys.
   const dataDir =
     process.env.HUSTERA_DB === "memory"
       ? undefined
-      : process.env.HUSTERA_DB_DIR ?? path.join(process.cwd(), ".data", "pglite");
+      : (process.env.HUSTERA_DB_DIR ??
+        (process.env.RAILWAY_VOLUME_MOUNT_PATH ? path.join(process.env.RAILWAY_VOLUME_MOUNT_PATH, "pglite") : path.join(process.cwd(), ".data", "pglite")));
+  if (dataDir) await mkdir(dataDir, { recursive: true });
   const pg = dataDir ? await PGlite.create(dataDir) : await PGlite.create();
   return {
     async query<T>(text: string, params: unknown[] = []) {
