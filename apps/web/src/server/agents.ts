@@ -35,6 +35,8 @@ export interface MissionRow {
   delivery_content: string;
   product_id: string | null;
   agent_id: string | null;
+  repeat_hours: number | null;
+  next_run_at: Date | null;
   status: MissionStatus;
   status_reason: string;
   created_at: Date;
@@ -114,7 +116,7 @@ export async function setAgentsHalted(actor: { id: string; role: PlatformRole },
 
 export async function createMission(
   ownerId: string,
-  input: { kind: MissionKind; title: string; brief: string; region: string; mode: MissionMode; totalCents: number; perDayCents: number; perTaskCents: number; ownershipConfirmed: boolean; priceCents?: number; externalChannel?: boolean; productKind?: "digital" | "physical" | "service"; deliveryContent?: string; productId?: string | null; agentId?: string | null; templateId?: string | null },
+  input: { kind: MissionKind; title: string; brief: string; region: string; mode: MissionMode; totalCents: number; perDayCents: number; perTaskCents: number; ownershipConfirmed: boolean; priceCents?: number; externalChannel?: boolean; productKind?: "digital" | "physical" | "service"; deliveryContent?: string; productId?: string | null; agentId?: string | null; templateId?: string | null; repeatHours?: number | null },
 ): Promise<string> {
   const plan = planMission(input.kind, { externalChannel: input.externalChannel });
   return tx(async (db) => {
@@ -125,9 +127,9 @@ export async function createMission(
       if (!owned) throw new UserError("Choose one of your published products to promote");
     }
     const [m] = await db.query<{ id: string }>(
-      `insert into missions (owner_id, kind, title, brief, region, mode, ownership_confirmed, price_cents, external_channel, product_kind, delivery_content, product_id, agent_id, template_id)
-       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) returning id`,
-      [ownerId, input.kind, input.title, input.brief, input.region, input.mode, input.ownershipConfirmed, input.priceCents ?? 900, input.externalChannel ?? false, input.productKind ?? "digital", input.deliveryContent ?? "", input.productId ?? null, input.agentId ?? null, input.templateId ?? null],
+      `insert into missions (owner_id, kind, title, brief, region, mode, ownership_confirmed, price_cents, external_channel, product_kind, delivery_content, product_id, agent_id, template_id, repeat_hours)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) returning id`,
+      [ownerId, input.kind, input.title, input.brief, input.region, input.mode, input.ownershipConfirmed, input.priceCents ?? 900, input.externalChannel ?? false, input.productKind ?? "digital", input.deliveryContent ?? "", input.productId ?? null, input.agentId ?? null, input.templateId ?? null, input.kind === "revenue_report" || input.kind === "market_watch" ? (input.repeatHours ?? null) : null],
     );
     const missionId = m!.id;
     await db.query(`insert into budgets (mission_id, total_cents, per_day_cents, per_task_cents) values ($1, $2, $3, $4)`, [missionId, input.totalCents, input.perDayCents, input.perTaskCents]);
@@ -227,7 +229,8 @@ async function step(ownerId: string, missionId: string): Promise<StepResult> {
     if (!runnable) {
       if (tasks.every((t) => t.status === "succeeded")) {
         await setMissionStatus(db, missionId, "completed");
-        await event(db, { missionId, actor: "agent", from: "core", kind: "completed", message: "All tasks finished." });
+        if (mission.repeat_hours) await db.query(`update missions set next_run_at = now() + make_interval(hours => $2) where id = $1`, [missionId, mission.repeat_hours]);
+        await event(db, { missionId, actor: "agent", from: "core", kind: "completed", message: mission.repeat_hours ? `All tasks finished. Next scheduled run in ${mission.repeat_hours} h.` : "All tasks finished." });
         return "done";
       }
       if (tasks.some((t) => t.status === "awaiting_approval")) return "waiting";
@@ -395,4 +398,61 @@ export async function platformStats() {
             (select count(*) from products where status = 'active')::int as live_products`,
   );
   return r!;
+}
+
+const ACTIVITY_PHRASE: Record<string, string> = {
+  "instant.market_research": "researched a market",
+  "sandbox.research_plan": "drafted a research plan",
+  "instant.keyword_research": "found search keywords",
+  "instant.competitor_prices": "checked competitor prices",
+  "sandbox.offer_outline": "built an offer",
+  "ai.generate_product": "created a digital product",
+  "instant.cover_image": "designed a cover image",
+  "sandbox.compliance_checklist": "prepared a launch checklist",
+  "sandbox.listing_draft": "wrote a product listing",
+  "hustera.publish_to_store": "published a product",
+  "stripe.payment_link": "created a Stripe payment link",
+  "sandbox.promo_drafts": "drafted promotion posts",
+  "hustera.promote_post": "announced a launch",
+  "stripe.revenue_report": "built a revenue report",
+  "instant.market_snapshot": "fetched a market snapshot",
+};
+
+/** Recent completed agent work across the platform, anonymised (no users, products or amounts). */
+export async function agentActivity(limit = 12) {
+  const rows = await q<{ id: number; from_agent: string | null; tool_id: string; created_at: Date }>(
+    `select te.id, te.from_agent, t.tool_id, te.created_at from task_events te join tasks t on t.id = te.task_id
+      where te.kind = 'result' order by te.id desc limit $1`,
+    [limit],
+  );
+  return rows
+    .filter((r) => ACTIVITY_PHRASE[r.tool_id])
+    .map((r) => ({ id: r.id, agent: agentName(r.from_agent ?? "core"), action: ACTIVITY_PHRASE[r.tool_id]!, at: r.created_at }));
+}
+
+/**
+ * Starts the next run of recurring missions that are due (e.g. a daily
+ * revenue report). Called by the background worker.
+ */
+export async function startDueRecurringMissions(limit = 25): Promise<{ id: string; owner_id: string }[]> {
+  return tx(async (db) => {
+    const due = await db.query<{ id: string; owner_id: string }>(
+      `select id, owner_id from missions where status = 'completed' and repeat_hours is not null and next_run_at <= now() order by next_run_at limit $1 for update skip locked`,
+      [limit],
+    );
+    for (const m of due) {
+      await db.query(`update tasks set status = 'queued', status_reason = '', attempts = 0, updated_at = now() where mission_id = $1`, [m.id]);
+      await db.query(`update missions set status = 'active', status_reason = '', next_run_at = null, updated_at = now() where id = $1`, [m.id]);
+      await event(db, { missionId: m.id, actor: "system", kind: "scheduled", message: "Scheduled run started." });
+    }
+    return due;
+  });
+}
+
+export async function setMissionRepeat(ownerId: string, missionId: string, repeatHours: number | null) {
+  await tx(async (db) => {
+    const m = await ownedMission(db, ownerId, missionId, true);
+    if (m.kind !== "revenue_report" && m.kind !== "market_watch") throw new UserError("Only report missions can repeat");
+    await db.query(`update missions set repeat_hours = $2, next_run_at = case when $2::int is null then null when status = 'completed' then now() + make_interval(hours => $2::int) else next_run_at end where id = $1`, [missionId, repeatHours]);
+  });
 }

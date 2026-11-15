@@ -427,7 +427,9 @@ export async function createMissionAction(fd: FormData): Promise<ActionState> {
     });
     const agentId = getAgent(str(fd, "agentId"))?.id ?? null;
     const templateId = OPPORTUNITY_TEMPLATES.find((t) => t.id === str(fd, "templateId"))?.id ?? null;
-    missionId = await agents.createMission(viewer.id, { ...input, agentId, templateId });
+    const repeat = Number(str(fd, "repeatHours"));
+    const repeatHours = repeat === 24 || repeat === 168 ? repeat : null;
+    missionId = await agents.createMission(viewer.id, { ...input, agentId, templateId, repeatHours });
   });
   if (r?.error) return r;
   redirect(`/projects/${missionId}`);
@@ -738,5 +740,14 @@ export async function discoverInstantAction(): Promise<ActionState> {
       }
     }
     return `Discovery finished — ${results.join(", ")}`;
+  });
+}
+
+export async function missionRepeatAction(fd: FormData): Promise<ActionState> {
+  return run(async () => {
+    const viewer = await requireViewer();
+    const repeat = Number(str(fd, "repeatHours"));
+    await agents.setMissionRepeat(viewer.id, id(fd, "missionId"), repeat === 24 || repeat === 168 ? repeat : null);
+    return "Schedule updated";
   });
 }

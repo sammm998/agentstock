@@ -88,7 +88,7 @@ Statuses: `VERIFIED` (built and covered by automated tests) · `TESTED_SIMULATIO
 | DesignStudio | AI-written digital product → rights review → live → delivered after payment | NEEDS_CONNECTION (AI key); verified with a mocked model |
 | WebBuilder | Landing pages | NOT_BUILT |
 | EcomPro → Stripe | Creates Stripe product + price + shareable Payment Link after publishing; link sales recorded via the verified webhook and emailed to the buyer | VERIFIED with mocked Stripe (`test/stripe-agents.test.ts`); live needs `STRIPE_SECRET_KEY` + `HUSTERA_BASE_URL` |
-| RevenueDesk | Revenue report from the ledger, plus live Stripe balance and latest payments | VERIFIED (ledger); Stripe part mocked until a key is set |
+| RevenueDesk | Revenue report from the ledger, plus live Stripe balance and latest payments; can repeat daily or weekly via the background worker | VERIFIED (ledger); Stripe part mocked until a key is set |
 
 ## Other milestones
 
@@ -98,7 +98,7 @@ Statuses: `VERIFIED` (built and covered by automated tests) · `TESTED_SIMULATIO
 | H — Browser / desktop | Isolated browsers, Tauri companion | NOT_BUILT — needs a native app and a security review |
 | I — Regulated options | Card program, real pooled funding | BLOCKED until licensed partners and legal authorisation |
 | Community funding simulator (section 11) | Time-weighted split of imaginary units, clearly labelled | TESTED_SIMULATION |
-| Background worker | `POST /api/cron/agents` with `CRON_SECRET` advances autonomous missions | VERIFIED (route), schedule NEEDS_CONNECTION |
+| Background worker | `POST /api/cron/agents` with `CRON_SECRET` advances autonomous missions and starts due recurring runs (RevenueDesk, MarketWatch) | VERIFIED (route), schedule NEEDS_CONNECTION |
 
 ## Integration inventory
 

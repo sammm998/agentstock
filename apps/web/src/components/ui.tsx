@@ -83,6 +83,11 @@ export function Illustrative({ children = "Illustrative" }: { children?: ReactNo
 
 export function TimeAgo({ date }: { date: Date | string }) {
   const d = new Date(date);
+  const ahead = (d.getTime() - Date.now()) / 1000;
+  if (ahead > 60) {
+    const l = ahead < 3600 ? `in ${Math.round(ahead / 60)}m` : ahead < 86400 ? `in ${Math.round(ahead / 3600)}h` : `in ${Math.round(ahead / 86400)}d`;
+    return <time dateTime={d.toISOString()} title={d.toUTCString()}>{l}</time>;
+  }
   const s = Math.max(0, (Date.now() - d.getTime()) / 1000);
   const label =
     s < 60 ? "just now" : s < 3600 ? `${Math.floor(s / 60)}m` : s < 86400 ? `${Math.floor(s / 3600)}h` : s < 604800 ? `${Math.floor(s / 86400)}d` : d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });

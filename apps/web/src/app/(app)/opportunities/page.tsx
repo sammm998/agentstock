@@ -18,7 +18,7 @@ export default async function OpportunitiesPage() {
         {OPPORTUNITY_TEMPLATES.map((o) => {
           const joined = usage.find((u) => u.template_id === o.id)?.missions ?? 0;
           return (
-            <li key={o.id} className="card flex flex-col p-5">
+            <li key={o.id} className="card glow-border lift flex flex-col p-5">
               <div className="flex items-start gap-3">
                 <OpportunityIcon icon={o.icon} accent={o.accent} />
                 <div className="flex-1">

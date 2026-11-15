@@ -614,6 +614,8 @@ create index products_stripe_link_idx on products (stripe_payment_link_id);
 
 alter table missions drop constraint missions_kind_check;
 alter table missions add constraint missions_kind_check check (kind in ('start_business','sell_existing','promote_product','market_watch','revenue_report'));
+alter table missions add column repeat_hours int check (repeat_hours is null or repeat_hours between 1 and 720);
+alter table missions add column next_run_at timestamptz;
 `,
   },
 ];

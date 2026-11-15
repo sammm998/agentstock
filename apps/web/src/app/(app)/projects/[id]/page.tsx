@@ -6,7 +6,7 @@ import { MISSION_KIND_LABEL, formatCents, getAgent, getTool, type TaskStatus } f
 import { requireViewer } from "@/server/session";
 import { getMission, missionResults } from "@/server/agents";
 import { isUuid } from "@/server/core";
-import { approvalAction, missionStateAction, retryTaskAction, runMissionAction } from "@/app/actions";
+import { approvalAction, missionRepeatAction, missionStateAction, retryTaskAction, runMissionAction } from "@/app/actions";
 import { ActionForm } from "@/components/action-form";
 import { Markdown } from "@/components/markdown";
 import { MissionStatusBadge, TaskStatusText } from "@/components/missions";
@@ -133,6 +133,17 @@ export default async function MissionPage({ params }: { params: Promise<{ id: st
         </section>
 
         <aside className="space-y-6">
+          {(mission.kind === "revenue_report" || mission.kind === "market_watch") && (
+            <section className="card p-5" aria-labelledby="sched-h">
+              <h2 id="sched-h" className="font-semibold">Schedule</h2>
+              <p className="mt-1 text-sm text-muted">{mission.repeat_hours ? <>Runs every {mission.repeat_hours === 24 ? "day" : "week"}{mission.next_run_at ? <> · next <TimeAgo date={mission.next_run_at} /></> : null}</> : "Runs once"}</p>
+              <ActionForm action={missionRepeatAction} showOk className="mt-3 flex gap-2">
+                <input type="hidden" name="missionId" value={mission.id} />
+                <select name="repeatHours" defaultValue={mission.repeat_hours ?? ""} aria-label="Schedule" className="input"><option value="">Run once</option><option value="24">Every day</option><option value="168">Every week</option></select>
+                <button className="btn-secondary btn-sm">Save</button>
+              </ActionForm>
+            </section>
+          )}
           <section className="card border-mint/25 p-5" aria-labelledby="results-h">
             <h2 id="results-h" className="font-semibold">Results</h2>
             {results.products === 0 ? (

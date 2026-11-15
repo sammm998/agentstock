@@ -154,7 +154,20 @@ export default async function AgentPage({ params, searchParams }: { params: Prom
                   )}
                 </>
               )}
-              <Autonomy />
+              {(agent.launch === "revenue_report" || agent.launch === "market_watch") ? (
+                <div>
+                  <label className="label" htmlFor="repeatHours">Schedule</label>
+                  <select id="repeatHours" name="repeatHours" defaultValue="24" className="input">
+                    <option value="">Run once</option>
+                    <option value="24">Every day</option>
+                    <option value="168">Every week</option>
+                  </select>
+                  <p className="mt-1 text-xs text-muted">Recurring runs start automatically through the background worker.</p>
+                  <input type="hidden" name="mode" value="autonomous" />
+                </div>
+              ) : (
+                <Autonomy />
+              )}
               <Budget />
               {(agent.launch !== "promote_product" || live.length > 0) && <button className="btn-primary w-full">Start {agent.name}</button>}
             </ActionForm>

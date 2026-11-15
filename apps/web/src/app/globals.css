@@ -71,7 +71,8 @@ body {
 }
 
 @utility card {
-  @apply rounded-[var(--radius-card)] border border-line bg-slate/80 shadow-[var(--shadow-card)] backdrop-blur;
+  @apply rounded-[20px] border border-white/[0.07] shadow-[var(--shadow-card)] backdrop-blur;
+  background: linear-gradient(180deg, rgb(23 35 59 / 0.78), rgb(13 21 38 / 0.78));
 }
 
 @utility btn {
@@ -113,3 +114,105 @@ body {
 @utility eyebrow {
   @apply text-xs font-semibold uppercase tracking-[0.14em] text-muted;
 }
+
+/* ------------------------------------------------------------------ motion */
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-12px); }
+}
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+@keyframes draw-line {
+  from { stroke-dashoffset: 1200; }
+  to { stroke-dashoffset: 0; }
+}
+@keyframes hero-in {
+  from { opacity: 0; transform: translateY(24px) scale(0.98); filter: blur(6px); }
+  to { opacity: 1; transform: none; filter: none; }
+}
+@keyframes spin-slow {
+  to { transform: rotate(360deg); }
+}
+@keyframes pulse-ring {
+  0% { box-shadow: 0 0 0 0 rgb(78 242 194 / 0.55); }
+  100% { box-shadow: 0 0 0 12px rgb(78 242 194 / 0); }
+}
+@keyframes shimmer {
+  from { background-position: -200% 0; }
+  to { background-position: 200% 0; }
+}
+@keyframes toast-in {
+  0%, 12% { opacity: 0; transform: translateY(12px); }
+  18%, 82% { opacity: 1; transform: none; }
+  90%, 100% { opacity: 0; transform: translateY(-8px); }
+}
+
+.animate-float { animation: float 6s ease-in-out infinite; }
+.animate-float-slow { animation: float 9s ease-in-out infinite; }
+.animate-marquee { animation: marquee 40s linear infinite; }
+.animate-hero-in { animation: hero-in 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.animate-spin-slow { animation: spin-slow 40s linear infinite; }
+.animate-pulse-ring { animation: pulse-ring 1.8s ease-out infinite; }
+.animate-toast { animation: toast-in 6s ease-in-out infinite; }
+.draw-line { stroke-dasharray: 1200; animation: draw-line 2.6s 0.4s cubic-bezier(0.3, 0.6, 0.2, 1) both; }
+.text-shimmer {
+  background: linear-gradient(90deg, #8f7cff, #4ef2c2, #8f7cff, #4ef2c2);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shimmer 8s linear infinite;
+}
+
+/* Scroll reveal: elements start hidden only when JS is running (see Reveal). */
+.reveal { opacity: 0; transform: translateY(28px); transition: opacity 0.8s ease, transform 0.8s cubic-bezier(0.2, 0.7, 0.2, 1); }
+.reveal.is-visible { opacity: 1; transform: none; }
+
+/* Glass surface with a gradient hairline border and glow on hover. */
+.glass {
+  border-radius: 24px;
+  background: linear-gradient(180deg, rgb(23 35 59 / 0.75), rgb(11 18 34 / 0.75));
+  border: 1px solid rgb(255 255 255 / 0.07);
+  box-shadow: 0 1px 0 0 rgb(255 255 255 / 0.05) inset, 0 30px 60px -30px rgb(0 0 0 / 0.8);
+  backdrop-filter: blur(14px);
+}
+.glow-border { position: relative; }
+.glow-border::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(140deg, rgb(143 124 255 / 0.65), rgb(78 242 194 / 0.15) 40%, rgb(78 242 194 / 0.55));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  opacity: 0.55;
+  transition: opacity 0.4s ease;
+}
+.lift { transition: transform 0.4s cubic-bezier(0.2, 0.7, 0.2, 1), box-shadow 0.4s ease; }
+.lift:hover { transform: translateY(-4px); box-shadow: 0 0 0 1px rgb(101 88 245 / 0.35), 0 30px 60px -20px rgb(101 88 245 / 0.45); }
+.lift:hover.glow-border { position: relative; }
+.glow-border::before { opacity: 1; }
+
+.grid-bg {
+  background-image: linear-gradient(rgb(255 255 255 / 0.035) 1px, transparent 1px), linear-gradient(90deg, rgb(255 255 255 / 0.035) 1px, transparent 1px);
+  background-size: 64px 64px;
+  mask-image: radial-gradient(ellipse at center, #000 30%, transparent 75%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal { opacity: 1; transform: none; }
+  .animate-float, .animate-float-slow, .animate-marquee, .animate-spin-slow, .animate-toast, .text-shimmer { animation: none !important; }
+}
+
+@keyframes page-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+.page-in { animation: page-in 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+@media (prefers-reduced-motion: reduce) { .page-in { animation: none; } }

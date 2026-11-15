@@ -1,5 +1,5 @@
 import { q } from "@/server/db";
-import { runMission } from "@/server/agents";
+import { runMission, startDueRecurringMissions } from "@/server/agents";
 
 /**
  * Background worker entry point. Advances active autonomous missions. Call it
@@ -9,6 +9,7 @@ import { runMission } from "@/server/agents";
 export async function POST(req: Request) {
   const secret = process.env.CRON_SECRET;
   if (!secret || req.headers.get("authorization") !== `Bearer ${secret}`) return new Response("Unauthorized", { status: 401 });
+  const restarted = await startDueRecurringMissions();
   const missions = await q<{ id: string; owner_id: string }>(
     `select id, owner_id from missions where status = 'active' and mode = 'autonomous' order by updated_at asc limit 25`,
   );
@@ -20,5 +21,5 @@ export async function POST(req: Request) {
       results[m.id] = e instanceof Error ? `error: ${e.message}` : "error";
     }
   }
-  return Response.json({ processed: missions.length, results });
+  return Response.json({ restarted: restarted.length, processed: missions.length, results });
 }

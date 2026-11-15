@@ -37,7 +37,7 @@ export default async function AgentsPage() {
         {AGENT_REGISTRY.map((a) => {
           const u = usage.find((x) => x.agent_id === a.id);
           return (
-            <li key={a.id} className="card flex flex-col p-5">
+            <li key={a.id} className="card glow-border lift flex flex-col p-5">
               <div className="flex items-start gap-3">
                 <AgentIcon icon={a.icon} accent={a.accent} />
                 <div className="flex-1">

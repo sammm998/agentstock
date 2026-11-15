@@ -134,4 +134,21 @@ describe("Stripe agents", () => {
       delete process.env.STRIPE_SECRET_KEY;
     }
   });
+
+  it("runs recurring report missions on schedule", async () => {
+    const { startDueRecurringMissions } = await import("@/server/agents");
+    const owner = await user(true);
+    const id = await createMission(owner, { ...base, kind: "revenue_report", title: "Revenue report", brief: "Report my verified revenue.", agentId: "finance", repeatHours: 24 });
+    await runMission(owner, id);
+    let m = (await getMission(owner, id))!;
+    expect(m.mission.status).toBe("completed");
+    expect(m.mission.next_run_at).not.toBeNull();
+    expect((await startDueRecurringMissions()).some((x) => x.id === id)).toBe(false);
+    await q(`update missions set next_run_at = now() - interval '1 minute' where id = $1`, [id]);
+    expect((await startDueRecurringMissions()).some((x) => x.id === id)).toBe(true);
+    await runMission(owner, id);
+    m = (await getMission(owner, id))!;
+    expect(m.mission.status).toBe("completed");
+    expect(m.artifacts.filter((a) => a.kind === "revenue_report")).toHaveLength(2);
+  });
 });

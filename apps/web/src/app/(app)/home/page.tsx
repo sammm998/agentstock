@@ -94,7 +94,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
             {featuredAgents.map((a) => {
               const u = usageOf(a.id);
               return (
-                <li key={a.id} className="card relative flex flex-col p-4">
+                <li key={a.id} className="card glow-border lift relative flex flex-col p-4">
                   <span className={`absolute right-3 top-3 rounded-full px-2 py-0.5 text-[10px] font-semibold ${BADGE_STYLE[a.status]}`}>{STATUS_LABEL[a.status]}</span>
                   <div className="flex items-center gap-3 pr-2">
                     <AgentIcon icon={a.icon} accent={a.accent} size={38} />
@@ -126,7 +126,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
             {featuredOps.map((o) => {
               const count = joinedOf(o.id);
               return (
-                <li key={o.id} className="card flex flex-col p-4">
+                <li key={o.id} className="card glow-border lift flex flex-col p-4">
                   <div className="flex items-start gap-3">
                     <OpportunityIcon icon={o.icon} accent={o.accent} />
                     <div>
